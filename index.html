@@ -110,6 +110,13 @@
   .editrow input{padding:8px;font-size:13px;border-radius:9px}
   .editrow .x{background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer}
   .head{display:grid;grid-template-columns:44px 1fr 84px 84px 30px;gap:6px;font-size:11px;color:var(--muted);padding-bottom:4px}
+  .ask{display:flex;flex-direction:column;gap:7px}
+  .ask button{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 13px;font-size:14px;color:var(--ink);cursor:pointer;text-align:left;font-weight:600}
+  .ask button:active{background:var(--soft)}
+  .ask button small{display:block;font-weight:400;font-size:12px;color:var(--muted);margin-top:2px}
+  .steps{counter-reset:st;margin:0;padding:0;list-style:none}
+  .steps li{counter-increment:st;position:relative;padding:0 0 8px 26px;font-size:13.5px;line-height:1.4}
+  .steps li:before{content:counter(st);position:absolute;left:0;top:0;width:18px;height:18px;border-radius:50%;background:var(--ink);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
   .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:88px;background:var(--ink);color:#fff;padding:10px 16px;border-radius:22px;font-size:14px;z-index:40;opacity:0;transition:opacity .18s}
   .toast.show{opacity:1}
   @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -370,6 +377,67 @@
             res:oblig(30),spent:spentToday(),inc:nextIncome()};
   }
 
+  /* ---------- сводка для Claude ---------- */
+  function finContext(){
+    var D=daily(),F=forecast(HORIZON),W=worstGap(HORIZON),t=today(),L=[];
+    var mIn=0;S.incomes.forEach(function(i){if(i.on)mIn+=incAmt(i);});
+    var mOut=billsMonth()+S.foodDay*30;
+
+    L.push('Это выгрузка из моего приложения учёта личных финансов. Валюта — тенге (₸).');
+    L.push('Сегодня '+ruDate(t)+' '+t.getFullYear()+' г.');
+    L.push('');
+    L.push('== ДЕНЬГИ СЕЙЧАС ==');
+    L.push('На руках: '+fmt(S.balance)+'; отложено на досрочное погашение: '+fmt(S.pot));
+    L.push('Еда: '+fmt(S.foodDay)+' в день ('+fmt(S.foodDay*30)+' в месяц)');
+    L.push('Можно тратить в день, не уходя в минус за 60 дней: '+fmt(D.per));
+    L.push('Обязательные платежи ближайших 30 дней: '+fmt(D.res));
+    L.push('Прогноз при текущей трате: минимум '+fmt(F.min.v)+' наступит '+ruDate(F.min.d));
+    if(W.v<0)L.push('РИСК: в худшем сценарии (доход по нижней границе и с задержкой, нулевые траты) не хватает '+fmt(-W.v)+' к '+ruDate(W.d)+'.');
+    else L.push('Худший сценарий (доход по нижней границе и с задержкой, нулевые траты) проходит с запасом '+fmt(W.v)+'.');
+    L.push('За месяц: доход '+fmt(mIn)+', расход '+fmt(mOut)+', остаётся на досрочку '+fmt(mIn-mOut));
+    L.push('');
+    L.push('== ДОХОДЫ ==');
+    S.incomes.forEach(function(i){if(i.on)L.push('- '+i.title+': '+i.day+'-го, минимум '+fmt(i.min)+', реально жду '+fmt(i.plan||i.min)+', задержка до '+(i.delay||0)+' дн.');});
+    L.push('== РЕГУЛЯРНЫЕ ПЛАТЕЖИ ==');
+    S.bills.forEach(function(b){if(b.on)L.push('- '+b.title+': '+b.day+'-го, '+fmt(b.min)+(b.max!==b.min?'–'+fmt(b.max):''));});
+    payDays().forEach(function(d){var k=loansOnDay(d);if(k>0)L.push('- '+dayLabel(d)+': '+d+'-го, '+fmt(k));});
+    L.push('');
+    var open=S.loans.filter(function(l){return !l.closed;});
+    var q=open.filter(function(l){return l.prio>0;}).sort(function(a,b){return a.prio-b.prio;});
+    var sch=open.filter(function(l){return l.prio===0;});
+    var interest=0;open.forEach(function(l){if(l.rate>0)interest+=l.payment*l.months-l.payoff;});
+    L.push('== ДОЛГИ: '+open.length+' открытых ==');
+    L.push('Всего закрыть сегодня: '+fmt(debtTotal())+'. Платежей в месяц: '+fmt(kaspiTotal())+'. Переплата впереди по графику: '+fmt(interest)+'.');
+    L.push('Очередь досрочного погашения:');
+    q.forEach(function(l,i){
+      L.push('  '+(i+1)+'. '+l.name+' — закрыть за '+fmt(l.payoff)+', платёж '+fmt(l.payment)+' ('+loanDay(l)+'-го), осталось '+l.months+' мес, ставка '+l.rate+'% годовых');
+    });
+    L.push('Платить строго по графику, досрочно НЕ гасить:');
+    sch.forEach(function(l){
+      L.push('  - '+l.name+' — остаток '+fmt(l.payoff)+', платёж '+fmt(l.payment)+', '+l.months+' мес, ставка '+(l.rate===0?'0% (рассрочка)':l.rate+'%'));
+    });
+    var cl=S.loans.filter(function(l){return l.closed;});
+    if(cl.length)L.push('Уже закрыты: '+cl.map(function(l){return l.name;}).join(', '));
+    if(S.tx.length){
+      L.push('');
+      L.push('== ПОСЛЕДНИЕ ОПЕРАЦИИ ==');
+      S.tx.slice(0,10).forEach(function(x){L.push('  '+x.date+' — '+x.title+' '+(x.amount>0?'+':'')+fmt(x.amount));});
+    }
+    L.push('');
+    L.push('== ПРАВИЛА МОЕЙ СТРАТЕГИИ, их нарушать нельзя ==');
+    L.push('1. Рассрочка под 0% досрочно не гасится никогда.');
+    L.push('2. Займы около 11% годовых досрочно не гасятся — деньги эффективнее направить в дорогие.');
+    L.push('3. Освободившийся платёж переназначается на следующую цель, а не растворяется в бюджете.');
+    L.push('4. Мелкие цели (до 100 000) — копить и закрывать целиком: частичный платёж не убирает обязательство и не снижает минимум.');
+    L.push('5. Крупные цели — вносить частями сразу, не копить: остаток капает под 37%.');
+    L.push('6. Никаких новых кредитов и рассрочек.');
+    L.push('7. Перед каждым погашением сверять сумму в приложении банка — она пересчитывается ежедневно.');
+    L.push('8. Главный управляемый расход — еда. Это единственная крупная статья, которую я могу резать.');
+    L.push('');
+    L.push('Отвечай по-русски, конкретными суммами и датами, считай по цифрам выше. Без общих советов про финансовую дисциплину — я хорошо считаю сам.');
+    return L.join('\n');
+  }
+
   /* ---------- рендер ---------- */
   var root=document.getElementById('root');
 
@@ -378,6 +446,7 @@
     if(S.tab==='today')  html+=viewToday();
     if(S.tab==='debts')  html+=viewDebts();
     if(S.tab==='fixed')  html+=viewFixed();
+    if(S.tab==='ask')    html+=viewAsk();
     if(S.tab==='setup')  html+=viewSetup();
     html+='</div>';
     html+=tabsHtml();
@@ -387,7 +456,7 @@
   }
 
   function tabsHtml(){
-    var T=[['today','Сегодня','◉'],['debts','Долги','▤'],['fixed','Регулярное','⟳'],['setup','Настройки','⚙']];
+    var T=[['today','Сегодня','◉'],['debts','Долги','▤'],['fixed','Регулярное','⟳'],['ask','Спросить','✦'],['setup','Настройки','⚙']];
     return '<nav class="tabs">'+T.map(function(t){
       return '<button data-tab="'+t[0]+'" class="'+(S.tab===t[0]?'on':'')+'"><span class="ic">'+t[2]+'</span>'+t[1]+'</button>';
     }).join('')+'</nav>';
@@ -616,6 +685,61 @@
     return h;
   }
 
+  var ASKS=[
+    ['Мне пришли деньги','Куда их направить в первую очередь',
+     'Мне только что пришли деньги на руки. Куда направить их в первую очередь с учётом ближайших платежей и очереди погашения? Дай конкретный план: сколько придержать на обязательные платежи, сколько отправить в досрочку и в какой именно заём.'],
+    ['Переживу ли я ближайшие платежи','Проверить разрывы на месяц вперёд',
+     'Проверь, хватает ли мне денег на все обязательные платежи ближайшего месяца. Если где-то разрыв — назови дату, сумму нехватки и что сделать заранее, пока есть время договориться.'],
+    ['Что закрывать следующим','Проверить очередь погашения',
+     'Посмотри мою очередь досрочного погашения. Она всё ещё оптимальна? Если нет — что переставить и почему. Считай и по ставкам, и по тому, сколько высвобождает ежемесячный платёж.'],
+    ['Где я переплачиваю','Что реально урезать в расходах',
+     'Разбери мои расходы и скажи, где я теряю больше всего и что реально урезать. Посчитай, на сколько конкретно это приблизит выход из долгов.'],
+    ['Когда я выйду из долгов','Прогноз и чем его ускорить',
+     'Посчитай, когда я закрою все долги при нынешних доходах и расходах. Что сдвинет эту дату сильнее всего?']
+  ];
+
+  function copyToClip(txt){
+    var ta=document.getElementById('askDump');
+    if(ta)ta.value=txt;
+    var done=function(){toast('Скопировано — вставляй в Claude');};
+    var manual=function(){
+      if(ta){
+        ta.focus();
+        try{
+          ta.setSelectionRange(0,txt.length);
+          if(document.execCommand('copy')){done();return;}
+        }catch(e){}
+      }
+      toast('Выдели текст внизу и скопируй вручную');
+    };
+    if(navigator.clipboard&&navigator.clipboard.writeText)
+      navigator.clipboard.writeText(txt).then(done,manual);
+    else manual();
+  }
+
+  function viewAsk(){
+    var h='';
+    h+='<div class="card"><h3>Совет по деньгам</h3>';
+    h+='<ol class="steps">';
+    h+='<li>Нажми вопрос — весь твой расклад ляжет в буфер обмена.</li>';
+    h+='<li>Открой приложение Claude и вставь: долгое нажатие в поле ввода → «Вставить».</li>';
+    h+='<li>Отправь. Claude увидит баланс, все займы со ставками, прогноз и правила стратегии.</li>';
+    h+='</ol>';
+    h+='<div class="hint">Бесплатно: работает на твоей подписке Claude. Ключи и оплата API не нужны.</div></div>';
+
+    h+='<div class="card"><h3>Готовые вопросы</h3><div class="ask">';
+    ASKS.forEach(function(a,i){
+      h+='<button data-ask="'+i+'">'+esc(a[0])+'<small>'+esc(a[1])+'</small></button>';
+    });
+    h+='<button data-ask="-1">Свой вопрос<small>Скопировать только расклад, вопрос напишешь сам</small></button>';
+    h+='</div></div>';
+
+    h+='<div class="card"><h3>Что уходит в буфер<span class="aside">'+fmt(finContext().length)+' знаков</span></h3>';
+    h+='<textarea id="askDump" rows="6" readonly>'+esc(finContext())+'</textarea>';
+    h+='<div class="hint">Никуда само ничего не отправляется — текст только копируется, вставляешь его ты. Если копирование не сработало, выдели текст здесь вручную.</div></div>';
+    return h;
+  }
+
   function viewSetup(){
     var h='';
     h+='<div class="card"><h3>Сверка баланса</h3>';
@@ -797,6 +921,13 @@
         if(p[0]==='inc')S.incomes=S.incomes.filter(function(x){return x.id!==p[1];});
         else S.bills=S.bills.filter(function(x){return x.id!==p[1];});
         persist();render();
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-ask]'),function(b){
+      b.onclick=function(){
+        var i=parseInt(b.getAttribute('data-ask'),10),txt=finContext();
+        if(i>=0)txt+='\n\nВОПРОС: '+ASKS[i][2];
+        copyToClip(txt);
       };
     });
     on('addBill',function(){
