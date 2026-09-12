@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Деньги</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Деньги">
+<meta name="theme-color" content="#0F2A2C">
+<meta name="robots" content="noindex,nofollow">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="icon.png">
+</head>
+<body>
+<div id="root"></div>
+
+<style>
+  :root{
+    --ink:#0F2A2C;
+    --paper:#ECEFEA;
+    --card:#FFFFFF;
+    --muted:#6E817D;
+    --line:#DBE1DC;
+    --good:#1F7A5C;
+    --warn:#9A6B08;
+    --bad:#A8371F;
+    --soft:#F5F7F3;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;background:#ECEFEA;height:100%}
+  #root{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink);
+    background:var(--paper);
+    font-size:15px;
+    line-height:1.45;
+    padding-bottom:78px;
+    min-height:100%;
+    font-variant-numeric:tabular-nums;
+  }
+  .wrap{max-width:520px;margin:0 auto;padding:14px 14px 0}
+  .num{font-variant-numeric:tabular-nums;letter-spacing:-0.01em}
+
+  .hero{background:var(--ink);color:#EFF3EE;border-radius:20px;padding:20px 18px 16px;margin-bottom:12px}
+  .hero .lbl{font-size:13px;color:#9FB5B0;margin-bottom:2px}
+  .hero .big{font-size:44px;font-weight:800;line-height:1.05;letter-spacing:-0.03em}
+  .hero .big.neg{color:#F0A28E}
+  .hero .sub{font-size:13px;color:#9FB5B0;margin-top:6px}
+  .heroRow{display:flex;gap:10px;margin-top:16px;border-top:1px solid #2A4749;padding-top:12px}
+  .heroCell{flex:1}
+  .heroCell .k{font-size:11px;color:#8FA9A4;margin-bottom:1px}
+  .heroCell .v{font-size:16px;font-weight:700}
+
+  .card{background:var(--card);border-radius:16px;padding:14px;margin-bottom:12px;border:1px solid var(--line)}
+  .card h3{margin:0 0 10px;font-size:15px;font-weight:700}
+  .card h3 .aside{float:right;font-weight:500;font-size:13px;color:var(--muted)}
+
+  .row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:7px 0;border-bottom:1px solid var(--soft)}
+  .row:last-child{border-bottom:none}
+  .row .t{flex:1;min-width:0}
+  .row .t b{font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row .t small{color:var(--muted);font-size:12px}
+  .row .v{font-weight:700;white-space:nowrap}
+
+  input,select,button,textarea{font-family:inherit;font-size:15px}
+  input[type=text],input[type=number],select,textarea{
+    width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);
+  }
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--ink);outline-offset:-1px}
+  .btn{background:var(--ink);color:#fff;border:none;border-radius:12px;padding:12px 16px;font-weight:600;cursor:pointer}
+  .btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+  .btn.sm{padding:7px 11px;font-size:13px;border-radius:9px}
+  .btn:active{opacity:.75}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .inline{display:flex;gap:8px;align-items:center}
+
+  .tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:20px;background:var(--soft);color:var(--muted)}
+  .tag.hot{background:#F7E4DF;color:var(--bad)}
+  .tag.mid{background:#F7EEDA;color:var(--warn)}
+  .tag.cool{background:#E2EFE9;color:var(--good)}
+  .tag.zero{background:#E7EAF0;color:#4A5A6B}
+
+  .alert{border-radius:14px;padding:12px 14px;margin-bottom:12px;font-size:14px}
+  .alert.bad{background:#F7E4DF;color:#6E2010}
+  .alert.warn{background:#F9F0DB;color:#5E4406}
+  .alert.ok{background:#E2EFE9;color:#134E3A}
+
+  .tabs{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;z-index:20;padding-bottom:env(safe-area-inset-bottom)}
+  .tabs button{flex:1;background:none;border:none;padding:11px 2px 13px;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px}
+  .tabs button .ic{font-size:18px;line-height:1}
+  .tabs button.on{color:var(--ink)}
+
+  .bar{height:7px;background:var(--soft);border-radius:6px;overflow:hidden;margin-top:7px}
+  .bar i{display:block;height:100%;background:var(--good);border-radius:6px}
+
+  .mini{font-size:12px;color:var(--muted)}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.4}
+  .sep{height:1px;background:var(--line);margin:12px 0}
+  .loan{padding:10px 0;border-bottom:1px solid var(--soft)}
+  .loan:last-child{border-bottom:none}
+  .loan .hd{display:flex;justify-content:space-between;gap:8px;align-items:center}
+  .loan .nm{font-weight:600}
+  .loan .meta{font-size:12px;color:var(--muted);margin-top:2px}
+  .done{opacity:.42}
+  .chart{width:100%;height:120px;display:block}
+  .editrow{display:grid;grid-template-columns:44px 1fr 84px 84px 30px;gap:6px;align-items:center;padding:5px 0}
+  .editrow input{padding:8px;font-size:13px;border-radius:9px}
+  .editrow .x{background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer}
+  .head{display:grid;grid-template-columns:44px 1fr 84px 84px 30px;gap:6px;font-size:11px;color:var(--muted);padding-bottom:4px}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:88px;background:var(--ink);color:#fff;padding:10px 16px;border-radius:22px;font-size:14px;z-index:40;opacity:0;transition:opacity .18s}
+  .toast.show{opacity:1}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- дефолтные данные ---------- */
+  var DEFAULT_LOANS = [
+    // Freedom / МФО — платёж 18-го
+    {id:'MFO', name:'МФО Freedom', payoff:501704, payment:50642, months:12, rate:37.0, prio:6, day:18},
+    // рассрочка (0%)
+    {id:'R1', name:'Рассрочка 1',  payoff:66617,  payment:4441,  months:15, rate:0,    prio:0},
+    {id:'R2', name:'Рассрочка 2',  payoff:218719, payment:72906, months:3,  rate:0,    prio:0},
+    {id:'R3', name:'Рассрочка 3',  payoff:33332,  payment:3333,  months:10, rate:0,    prio:0},
+    {id:'R4', name:'Рассрочка 4',  payoff:34484,  payment:11495, months:3,  rate:0,    prio:0},
+    // кредиты
+    {id:'K1',  name:'Кредит 1',  payoff:10026,  payment:5088,  months:2,  rate:11.8, prio:0},
+    {id:'K2',  name:'Кредит 2',  payoff:86973,  payment:10089, months:10, rate:33.6, prio:5},
+    {id:'K3',  name:'Кредит 3',  payoff:30002,  payment:5163,  months:6,  rate:11.0, prio:0},
+    {id:'K4',  name:'Кредит 4',  payoff:13849,  payment:2053,  months:7,  rate:11.2, prio:0},
+    {id:'K5',  name:'Кредит 5',  payoff:43026,  payment:4991,  months:10, rate:33.6, prio:3},
+    {id:'K6',  name:'Кредит 6',  payoff:129922, payment:11473, months:12, rate:10.9, prio:0},
+    {id:'K7',  name:'Кредит 7',  payoff:8942,   payment:3040,  months:3,  rate:12.0, prio:0},
+    {id:'K8',  name:'Кредит 8',  payoff:19901,  payment:4091,  months:5,  rate:11.0, prio:0},
+    {id:'K9',  name:'Кредит 9',  payoff:9917,   payment:2040,  months:5,  rate:11.2, prio:0},
+    {id:'K10', name:'Кредит 10', payoff:13880,  payment:2057,  months:7,  rate:11.2, prio:0},
+    {id:'K11', name:'Кредит 11', payoff:46140,  payment:5023,  months:11, rate:37.6, prio:1},
+    {id:'K12', name:'Кредит 12', payoff:352537, payment:14398, months:48, rate:38.6, prio:8},
+    {id:'K13', name:'Кредит 13', payoff:150318, payment:9039,  months:24, rate:38.1, prio:7},
+    {id:'K14', name:'Кредит 14', payoff:151863, payment:10880, months:15, rate:11.0, prio:0},
+    {id:'K15', name:'Кредит 15', payoff:131829, payment:9029,  months:17, rate:21.0, prio:9},
+    {id:'K16', name:'Кредит 16', payoff:80574,  payment:10035, months:9,  rate:28.2, prio:4},
+    {id:'K17', name:'Кредит 17', payoff:50746,  payment:5141,  months:12, rate:37.7, prio:2},
+    {id:'K18', name:'Кредит 18', payoff:33872,  payment:6963,  months:5,  rate:11.0, prio:0},
+    {id:'K19', name:'Кредит 19', payoff:262270, payment:17962, months:17, rate:21.0, prio:10},
+    {id:'K20', name:'Кредит 20', payoff:29600,  payment:5093,  months:6,  rate:11.0, prio:0},
+    {id:'K21', name:'Кредит 21', payoff:27384,  payment:4058,  months:7,  rate:11.0, prio:0}
+  ];
+
+  var DEFAULT_BILLS = [
+    {id:'b1', day:5,  title:'Подписка (голос)',   min:5000,   max:5000,   on:true},
+    {id:'b2', day:12, title:'Claude',             min:11000,  max:11000,  on:true},
+    {id:'b3', day:17, title:'Квартира',           min:120000, max:120000, on:true},
+    {id:'b4', day:17, title:'Студия',             min:120000, max:120000, on:true},
+    {id:'b5', day:20, title:'Коммуналка',         min:10000,  max:15000,  on:true},
+    {id:'b6', day:30, title:'Интернет дома',      min:5000,   max:5000,   on:true},
+    {id:'b7', day:30, title:'Интернет студия',    min:11000,  max:11000,  on:true}
+  ];
+
+  var DEFAULT_INCOMES = [
+    {id:'i1', day:1,  title:'Зарплата', min:150000, max:150000, plan:150000, delay:0, on:true},
+    {id:'i2', day:15, title:'Бонус',    min:500000, max:1500000, plan:700000, delay:3, on:true}
+  ];
+
+  var S = {
+    balance:0,
+    pot:0,
+    foodDay:10000,
+    mode:'plan',          // 'min' пессимистично | 'plan' по ожиданию
+    loans:DEFAULT_LOANS.map(function(l){var c={};for(var k in l)c[k]=l[k];c.closed=false;return c;}),
+    bills:DEFAULT_BILLS.slice(),
+    incomes:DEFAULT_INCOMES.slice(),
+    tx:[],
+    tab:'today',
+    ready:false
+  };
+
+  var KEY='fin:v1';
+
+  /* ---------- хранилище ---------- */
+  function persist(){
+    var data={balance:S.balance,pot:S.pot,foodDay:S.foodDay,mode:S.mode,
+              loans:S.loans,bills:S.bills,incomes:S.incomes,tx:S.tx.slice(0,400)};
+    try{ localStorage.setItem(KEY, JSON.stringify(data)); }catch(e){}
+  }
+  function load(cb){
+    try{
+      var raw=localStorage.getItem(KEY);
+      if(raw){
+        var d=JSON.parse(raw);
+        for(var k in d){ if(d[k]!==undefined&&d[k]!==null) S[k]=d[k]; }
+      }
+    }catch(e){}
+    migrate();
+    S.ready=true;cb();
+  }
+
+  function migrate(){
+    var has=false;
+    S.loans.forEach(function(l){if(l.id==='MFO')has=true;});
+    if(!has){
+      var bump={'K13':7,'K12':8,'K15':9,'K19':10};
+      S.loans.forEach(function(l){if(bump[l.id])l.prio=bump[l.id];});
+      S.loans.unshift({id:'MFO',name:'МФО Freedom',payoff:501704,payment:50642,
+                       months:12,rate:37.0,prio:6,day:18,closed:false});
+      persist();
+    }
+    S.loans.forEach(function(l){if(!l.day)l.day=12;});
+  }
+
+  /* ---------- утилиты ---------- */
+  function fmt(n){
+    n=Math.round(n||0);
+    var s=Math.abs(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');
+    return (n<0?'−':'')+s;
+  }
+  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+    return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  function today(){var d=new Date();d.setHours(0,0,0,0);return d;}
+  function addDays(d,n){var x=new Date(d);x.setDate(x.getDate()+n);return x;}
+  function lastDay(d){return new Date(d.getFullYear(),d.getMonth()+1,0).getDate();}
+  function dnum(d){return d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate();}
+  function ruDate(d){
+    var m=['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+    return d.getDate()+' '+m[d.getMonth()];
+  }
+  function effDay(day,d){return Math.min(day,lastDay(d));}
+  function billAmt(b){return S.mode==='min'?b.max:Math.round((b.min+b.max)/2);}
+  function incAmt(i){return S.mode==='min'?i.min:(i.plan||i.min);}
+  function incDay(i){return i.day+(S.mode==='min'?(i.delay||0):0);}
+
+  function kaspiTotal(){
+    var s=0;S.loans.forEach(function(l){if(!l.closed)s+=l.payment;});return s;
+  }
+  function loanDay(l){return l.day||12;}
+  function loansOnDay(day){
+    var s=0;S.loans.forEach(function(l){if(!l.closed&&loanDay(l)===day)s+=l.payment;});return s;
+  }
+  function payDays(){
+    var d={},out=[];
+    S.loans.forEach(function(l){if(!l.closed)d[loanDay(l)]=1;});
+    for(var k in d)out.push(parseInt(k,10));
+    out.sort(function(a,b){return a-b;});
+    return out;
+  }
+  function dayLabel(day){return day===18?'Платёж МФО':'Платежи Kaspi';}
+  function debtTotal(){
+    var s=0;S.loans.forEach(function(l){if(!l.closed)s+=l.payoff;});return s;
+  }
+  function billsMonth(){
+    var s=0;S.bills.forEach(function(b){if(b.on)s+=billAmt(b);});return s+kaspiTotal();
+  }
+  function target(){
+    var open=S.loans.filter(function(l){return !l.closed&&l.prio>0;});
+    open.sort(function(a,b){return a.prio-b.prio;});
+    return open[0]||null;
+  }
+
+  /* события дня: [{title, amount(+/-)}] */
+  function eventsOn(d){
+    var out=[];
+    S.incomes.forEach(function(i){
+      if(!i.on)return;
+      var day=incDay(i);
+      if(d.getDate()===effDay(day,d)) out.push({t:i.title,a:incAmt(i)});
+    });
+    S.bills.forEach(function(b){
+      if(!b.on)return;
+      if(d.getDate()===effDay(b.day,d)) out.push({t:b.title,a:-billAmt(b)});
+    });
+    payDays().forEach(function(day){
+      if(d.getDate()===effDay(day,d)){
+        var k=loansOnDay(day);
+        if(k>0) out.push({t:dayLabel(day),a:-k});
+      }
+    });
+    return out;
+  }
+
+  function forecast(days){
+    var t=today(),bal=S.balance-S.pot,pts=[],min={v:bal,d:t};
+    for(var i=0;i<=days;i++){
+      var d=addDays(t,i);
+      if(i>0){
+        eventsOn(d).forEach(function(e){bal+=e.a;});
+        bal-=S.foodDay;
+      }
+      pts.push({d:d,v:bal});
+      if(bal<min.v){min={v:bal,d:d};}
+    }
+    return {pts:pts,min:min,end:bal};
+  }
+
+  function nextIncome(){
+    var t=today();
+    for(var i=1;i<=70;i++){
+      var d=addDays(t,i),hit=null;
+      S.incomes.forEach(function(inc){
+        if(!inc.on)return;
+        if(d.getDate()===effDay(incDay(inc),d)) hit=hit||{d:d,inc:inc};
+      });
+      if(hit)return hit;
+    }
+    return null;
+  }
+
+  function daily(){
+    var t=today(),ni=nextIncome();
+    var horizon=ni?ni.d:addDays(t,30);
+    var days=Math.max(1,Math.round((horizon-t)/86400000));
+    var res=0;
+    for(var i=0;i<=days;i++){
+      var d=addDays(t,i);
+      if(i===0)continue;
+      eventsOn(d).forEach(function(e){if(e.a<0)res-=e.a;});
+    }
+    var free=S.balance-S.pot-res;
+    return {res:res,free:free,days:days,per:free/days,until:horizon,inc:ni};
+  }
+
+  /* ---------- рендер ---------- */
+  var root=document.getElementById('root');
+
+  function render(){
+    var html='<div class="wrap">';
+    if(S.tab==='today')  html+=viewToday();
+    if(S.tab==='debts')  html+=viewDebts();
+    if(S.tab==='fixed')  html+=viewFixed();
+    if(S.tab==='setup')  html+=viewSetup();
+    html+='</div>';
+    html+=tabsHtml();
+    html+='<div class="toast" id="toast"></div>';
+    root.innerHTML=html;
+    bind();
+  }
+
+  function tabsHtml(){
+    var T=[['today','Сегодня','◉'],['debts','Долги','▤'],['fixed','Регулярное','⟳'],['setup','Настройки','⚙']];
+    return '<nav class="tabs">'+T.map(function(t){
+      return '<button data-tab="'+t[0]+'" class="'+(S.tab===t[0]?'on':'')+'"><span class="ic">'+t[2]+'</span>'+t[1]+'</button>';
+    }).join('')+'</nav>';
+  }
+
+  function viewToday(){
+    var D=daily(),F=forecast(60),h='';
+    var per=D.per;
+
+    h+='<div class="hero">';
+    h+='<div class="lbl">Можно потратить сегодня</div>';
+    h+='<div class="big num'+(per<0?' neg':'')+'">'+fmt(per)+' ₸</div>';
+    h+='<div class="sub">до '+(D.inc?esc(D.inc.inc.title).toLowerCase():'конца периода')+' '+ruDate(D.until)+' · '+D.days+' дн.</div>';
+    h+='<div class="heroRow">';
+    h+='<div class="heroCell"><div class="k">На руках</div><div class="v num">'+fmt(S.balance)+'</div></div>';
+    h+='<div class="heroCell"><div class="k">Зарезервировано</div><div class="v num">'+fmt(D.res+S.pot)+'</div></div>';
+    h+='<div class="heroCell"><div class="k">Свободно</div><div class="v num">'+fmt(D.free)+'</div></div>';
+    h+='</div></div>';
+
+    if(F.min.v<0){
+      h+='<div class="alert bad"><b>Деньги закончатся '+ruDate(F.min.d)+'</b><br>'+
+         'Прогноз уходит в минус до '+fmt(F.min.v)+' ₸. Нужен дополнительный доход или сокращение трат примерно на '+
+         fmt(Math.abs(F.min.v))+' ₸ до этой даты.</div>';
+    } else if(F.min.v<50000){
+      h+='<div class="alert warn">Самая тонкая точка — '+ruDate(F.min.d)+', останется '+fmt(F.min.v)+' ₸. Запас почти нулевой.</div>';
+    } else {
+      h+='<div class="alert ok">Минимум за 60 дней: '+fmt(F.min.v)+' ₸ '+ruDate(F.min.d)+'. Кассовых разрывов не видно.</div>';
+    }
+
+    // связка 17-18
+    var crunch=0,t2=today();
+    S.bills.forEach(function(b){if(b.on&&(b.day===17||b.day===18))crunch+=billAmt(b);});
+    crunch+=loansOnDay(17)+loansOnDay(18);
+    if(crunch>0){
+      h+='<div class="alert warn"><b>17–18 числа: '+fmt(crunch)+' ₸ за два дня</b><br>'+
+         'Жильё и платёж в МФО стоят вплотную. Если бонус задержится до 19–20-го, оба платежа провалятся. Эту сумму держи отложенной с прошлого месяца.</div>';
+    }
+
+    // быстрый ввод
+    h+='<div class="card"><h3>Записать</h3>';
+    h+='<input type="text" id="qi" placeholder="такси 1500 · обед 4200 · подработка +50000">';
+    h+='<div class="grid2" style="margin-top:8px">';
+    h+='<button class="btn" id="qExp">Расход</button>';
+    h+='<button class="btn ghost" id="qInc">Доход</button>';
+    h+='</div>';
+    h+='<div class="hint">Пиши как удобно: сумма и что это. Знак «+» сразу пишет доход.</div></div>';
+
+    // прогноз
+    h+='<div class="card"><h3>Баланс на 60 дней<span class="aside">'+(S.mode==='min'?'пессимистично':'по плану')+'</span></h3>';
+    h+=chart(F.pts);
+    h+='<div class="grid2" style="margin-top:10px">';
+    h+='<button class="btn ghost sm" id="mMin"'+(S.mode==='min'?' disabled':'')+'>Худший сценарий</button>';
+    h+='<button class="btn ghost sm" id="mPlan"'+(S.mode==='plan'?' disabled':'')+'>Ожидаемый</button>';
+    h+='</div></div>';
+
+    // ближайшие события
+    h+='<div class="card"><h3>Ближайшие списания</h3>';
+    var t=today(),cnt=0,rows='';
+    for(var i=1;i<=35&&cnt<7;i++){
+      var d=addDays(t,i),ev=eventsOn(d);
+      for(var j=0;j<ev.length&&cnt<7;j++){
+        rows+='<div class="row"><div class="t"><b>'+esc(ev[j].t)+'</b><small>'+ruDate(d)+'</small></div>'+
+              '<div class="v num" style="color:'+(ev[j].a>0?'var(--good)':'var(--ink)')+'">'+
+              (ev[j].a>0?'+':'')+fmt(ev[j].a)+'</div></div>';
+        cnt++;
+      }
+    }
+    h+=rows+'</div>';
+
+    // цель
+    var g=target();
+    if(g){
+      var need=Math.max(0,g.payoff-S.pot);
+      var pct=Math.min(100,Math.round(S.pot/g.payoff*100));
+      h+='<div class="card"><h3>Цель: '+esc(g.name)+'<span class="aside">'+g.rate+'% годовых</span></h3>';
+      h+='<div class="row"><div class="t"><b>Накоплено на досрочку</b><small>освободит '+fmt(g.payment)+' ₸ в месяц</small></div>'+
+         '<div class="v num">'+fmt(S.pot)+' / '+fmt(g.payoff)+'</div></div>';
+      h+='<div class="bar"><i style="width:'+pct+'%"></i></div>';
+      h+='<div class="hint">Осталось собрать '+fmt(need)+' ₸.</div>';
+      h+='<div class="grid2" style="margin-top:10px">';
+      h+='<input type="number" id="potAdd" placeholder="сумма" inputmode="numeric">';
+      h+='<button class="btn" id="potBtn">В копилку</button>';
+      h+='</div></div>';
+    }
+
+    // история
+    if(S.tx.length){
+      h+='<div class="card"><h3>История<span class="aside">'+S.tx.length+' записей</span></h3>';
+      S.tx.slice(0,12).forEach(function(x){
+        h+='<div class="row"><div class="t"><b>'+esc(x.title)+'</b><small>'+esc(x.date)+'</small></div>'+
+           '<div class="v num" style="color:'+(x.amount>0?'var(--good)':'var(--ink)')+'">'+
+           (x.amount>0?'+':'')+fmt(x.amount)+'</div></div>';
+      });
+      h+='</div>';
+    }
+    return h;
+  }
+
+  function chart(pts){
+    var w=480,hh=120,pad=6;
+    var vals=pts.map(function(p){return p.v;});
+    var mx=Math.max.apply(null,vals),mn=Math.min.apply(null,vals);
+    if(mx===mn){mx=mn+1;}
+    var zero=hh-pad-((0-mn)/(mx-mn))*(hh-pad*2);
+    var d='';
+    pts.forEach(function(p,i){
+      var x=pad+(i/(pts.length-1))*(w-pad*2);
+      var y=hh-pad-((p.v-mn)/(mx-mn))*(hh-pad*2);
+      d+=(i?'L':'M')+x.toFixed(1)+' '+y.toFixed(1);
+    });
+    var s='<svg class="chart" viewBox="0 0 '+w+' '+hh+'" preserveAspectRatio="none">';
+    if(mn<0&&mx>0){
+      s+='<rect x="0" y="'+zero+'" width="'+w+'" height="'+(hh-zero)+'" fill="#F7E4DF"/>';
+      s+='<line x1="0" y1="'+zero+'" x2="'+w+'" y2="'+zero+'" stroke="#A8371F" stroke-width="1" stroke-dasharray="4 4"/>';
+    }
+    s+='<path d="'+d+'" fill="none" stroke="#0F2A2C" stroke-width="2.5" stroke-linejoin="round"/>';
+    s+='</svg>';
+    s+='<div class="mini" style="display:flex;justify-content:space-between;margin-top:4px">'+
+       '<span>'+ruDate(pts[0].d)+'</span><span>мин '+fmt(mn)+'</span><span>'+ruDate(pts[pts.length-1].d)+'</span></div>';
+    return s;
+  }
+
+  function viewDebts(){
+    var h='',open=S.loans.filter(function(l){return !l.closed;});
+    var closed=S.loans.filter(function(l){return l.closed;});
+    var interest=0;
+    open.forEach(function(l){
+      if(l.rate>0) interest+=l.payment*l.months-l.payoff;
+    });
+
+    h+='<div class="hero"><div class="lbl">Долг к погашению сегодня</div>';
+    h+='<div class="big num">'+fmt(debtTotal())+' ₸</div>';
+    h+='<div class="heroRow">';
+    h+='<div class="heroCell"><div class="k">Платёж в месяц</div><div class="v num">'+fmt(kaspiTotal())+'</div></div>';
+    h+='<div class="heroCell"><div class="k">Переплата впереди</div><div class="v num">'+fmt(interest)+'</div></div>';
+    h+='<div class="heroCell"><div class="k">Закрыто</div><div class="v num">'+closed.length+' / '+S.loans.length+'</div></div>';
+    h+='</div></div>';
+
+    var q=open.filter(function(l){return l.prio>0;}).sort(function(a,b){return a.prio-b.prio;});
+    if(q.length){
+      h+='<div class="card"><h3>Очередь досрочного погашения</h3>';
+      q.forEach(function(l,i){h+=loanRow(l,i+1);});
+      h+='<div class="hint">Порядок собран так, чтобы каждый закрытый кредит быстрее освобождал платёж и при этом убирал самые дорогие проценты.</div></div>';
+    }
+
+    var sched=open.filter(function(l){return l.prio===0;});
+    if(sched.length){
+      h+='<div class="card"><h3>Платить по графику<span class="aside">не гасить досрочно</span></h3>';
+      sched.forEach(function(l){h+=loanRow(l,0);});
+      h+='<div class="hint">Здесь рассрочка под 0% и кредиты около 11% годовых. Досрочка по ним почти не экономит.</div></div>';
+    }
+
+    if(closed.length){
+      h+='<div class="card"><h3>Закрытые</h3>';
+      closed.forEach(function(l){
+        h+='<div class="loan done"><div class="hd"><span class="nm">'+esc(l.name)+'</span>'+
+           '<button class="btn ghost sm" data-reopen="'+l.id+'">Вернуть</button></div></div>';
+      });
+      h+='</div>';
+    }
+    return h;
+  }
+
+  function loanRow(l,n){
+    var cls=l.rate===0?'zero':(l.rate>=30?'hot':(l.rate>=20?'mid':'cool'));
+    var h='<div class="loan"><div class="hd"><div style="flex:1;min-width:0">';
+    h+='<span class="nm">'+(n?n+'. ':'')+esc(l.name)+'</span> <span class="tag '+cls+'">'+
+       (l.rate===0?'0%':l.rate+'%')+'</span>';
+    h+='<div class="meta">'+fmt(l.payment)+' ₸ '+loanDay(l)+'-го · '+l.months+' мес · закрыть за '+fmt(l.payoff)+'</div>';
+    h+='</div><div style="display:flex;flex-direction:column;gap:5px">';
+    h+='<button class="btn sm" data-close="'+l.id+'">Закрыт</button>';
+    h+='<button class="btn ghost sm" data-edit="'+l.id+'">Правка</button>';
+    h+='</div></div></div>';
+    return h;
+  }
+
+  function viewFixed(){
+    var h='';
+    h+='<div class="card"><h3>Доходы</h3>';
+    h+='<div class="head"><span>День</span><span>Название</span><span>Мин</span><span>Ожидаю</span><span></span></div>';
+    S.incomes.forEach(function(i){
+      h+='<div class="editrow">'+
+        '<input type="number" value="'+i.day+'" data-f="inc:'+i.id+':day">'+
+        '<input type="text" value="'+esc(i.title)+'" data-f="inc:'+i.id+':title">'+
+        '<input type="number" value="'+i.min+'" data-f="inc:'+i.id+':min">'+
+        '<input type="number" value="'+(i.plan||i.min)+'" data-f="inc:'+i.id+':plan">'+
+        '<button class="x" data-del="inc:'+i.id+'">×</button></div>';
+    });
+    h+='<button class="btn ghost sm" id="addInc" style="margin-top:8px">Добавить доход</button>';
+    h+='<div class="hint">«Мин» — на что точно можно рассчитывать, «Ожидаю» — реалистичная оценка. Худший сценарий на главном экране считается по минимуму и с задержкой бонуса.</div></div>';
+
+    h+='<div class="card"><h3>Регулярные платежи<span class="aside">'+fmt(billsMonth())+' ₸/мес</span></h3>';
+    h+='<div class="head"><span>День</span><span>Название</span><span>Мин</span><span>Макс</span><span></span></div>';
+    S.bills.forEach(function(b){
+      h+='<div class="editrow">'+
+        '<input type="number" value="'+b.day+'" data-f="bill:'+b.id+':day">'+
+        '<input type="text" value="'+esc(b.title)+'" data-f="bill:'+b.id+':title">'+
+        '<input type="number" value="'+b.min+'" data-f="bill:'+b.id+':min">'+
+        '<input type="number" value="'+b.max+'" data-f="bill:'+b.id+':max">'+
+        '<button class="x" data-del="bill:'+b.id+'">×</button></div>';
+    });
+    h+='<button class="btn ghost sm" id="addBill" style="margin-top:8px">Добавить платёж</button>';
+    h+='<div class="hint">Платежи по кредитам подставляются сами из вкладки «Долги»: '+
+       fmt(loansOnDay(12))+' ₸ 12-го числа (Kaspi) и '+fmt(loansOnDay(18))+
+       ' ₸ 18-го (МФО Freedom). Когда кредит закрывается, суммы уменьшаются автоматически.</div></div>';
+
+    // еда
+    var m=S.foodDay*30;
+    h+='<div class="card"><h3>Еда<span class="aside">'+fmt(m)+' ₸/мес</span></h3>';
+    h+='<div class="inline"><input type="number" id="foodDay" value="'+S.foodDay+'" inputmode="numeric">'+
+       '<button class="btn" id="foodSave">Сохранить</button></div>';
+    h+='<div class="hint">Сейчас '+fmt(S.foodDay)+' ₸ в день. При переходе на готовую еду 6 000 ₸/день выйдет '+
+       fmt(6000*30)+' ₸ в месяц — это '+fmt(m-6000*30)+' ₸ высвобождается на погашение.</div></div>';
+
+    return h;
+  }
+
+  function viewSetup(){
+    var h='';
+    h+='<div class="card"><h3>Сверка баланса</h3>';
+    h+='<div class="inline"><input type="number" id="balSet" value="'+S.balance+'" inputmode="numeric">'+
+       '<button class="btn" id="balBtn">Записать</button></div>';
+    h+='<div class="hint">Раз в несколько дней открывай Kaspi и вписывай сюда реальную сумму на счетах. Это обнуляет накопившиеся неточности.</div></div>';
+
+    h+='<div class="card"><h3>Копилка на досрочку</h3>';
+    h+='<div class="inline"><input type="number" id="potSet" value="'+S.pot+'" inputmode="numeric">'+
+       '<button class="btn" id="potSetBtn">Записать</button></div>';
+    h+='<div class="hint">Эти деньги не участвуют в дневном лимите. Они ждут закрытия следующего кредита.</div></div>';
+
+    var mIn=0;S.incomes.forEach(function(i){if(i.on)mIn+=incAmt(i);});
+    var mOut=billsMonth()+S.foodDay*30;
+    h+='<div class="card"><h3>Месяц в целом</h3>';
+    h+='<div class="row"><div class="t"><b>Доход</b></div><div class="v num">'+fmt(mIn)+'</div></div>';
+    h+='<div class="row"><div class="t"><b>Жильё, связь, подписки</b></div><div class="v num">'+fmt(billsMonth()-kaspiTotal())+'</div></div>';
+    h+='<div class="row"><div class="t"><b>Еда</b></div><div class="v num">'+fmt(S.foodDay*30)+'</div></div>';
+    h+='<div class="row"><div class="t"><b>Кредиты</b></div><div class="v num">'+fmt(kaspiTotal())+'</div></div>';
+    h+='<div class="row"><div class="t"><b>Остаётся на досрочку</b></div><div class="v num" style="color:'+
+       ((mIn-mOut)>=0?'var(--good)':'var(--bad)')+'">'+fmt(mIn-mOut)+'</div></div>';
+    var be=mOut-150000;
+    h+='<div class="hint">Точка безубыточности по бонусу: '+fmt(be)+' ₸. Всё, что выше — идёт на досрочку.</div></div>';
+
+    h+='<div class="card"><h3>Резервная копия</h3>';
+    h+='<textarea id="dump" rows="4" placeholder="сюда вставь копию для восстановления"></textarea>';
+    h+='<div class="grid2" style="margin-top:8px">';
+    h+='<button class="btn ghost" id="expBtn">Выгрузить</button>';
+    h+='<button class="btn ghost" id="impBtn">Загрузить</button></div>';
+    h+='<div class="hint">Копируй текст себе в заметки раз в месяц — на случай, если что-то пойдёт не так.</div></div>';
+
+    h+='<div class="card"><h3>Сбросить всё</h3>';
+    h+='<button class="btn ghost" id="resetBtn">Вернуть к исходным данным</button>';
+    h+='<div class="hint">История трат и правки будут удалены. Кредиты вернутся к тем цифрам, с которых начинали.</div></div>';
+    return h;
+  }
+
+  /* ---------- события ---------- */
+  function toast(msg){
+    var t=document.getElementById('toast');
+    if(!t)return;
+    t.textContent=msg;t.classList.add('show');
+    setTimeout(function(){t.classList.remove('show');},1600);
+  }
+  function on(id,fn){var e=document.getElementById(id);if(e)e.onclick=fn;}
+
+  function parseEntry(s,sign){
+    s=(s||'').trim();
+    if(!s)return null;
+    var forceInc=/^\+/.test(s);
+    s=s.replace(/^\+/,'').trim();
+    var m=s.match(/-?\d[\d\s.,]*/);
+    if(!m)return null;
+    var amt=parseFloat(m[0].replace(/[\s,]/g,''));
+    if(!isFinite(amt)||amt===0)return null;
+    var title=s.replace(m[0],'').trim().replace(/^[-–—:]+/,'').trim();
+    if(!title)title=(forceInc||sign>0)?'Доход':'Расход';
+    return {amount:Math.abs(amt)*((forceInc||sign>0)?1:-1),title:title};
+  }
+
+  function addTx(rec){
+    var d=new Date();
+    S.tx.unshift({id:Date.now(),date:ruDate(d),title:rec.title,amount:rec.amount});
+    S.balance+=rec.amount;
+    persist();render();
+    toast((rec.amount>0?'Доход ':'Расход ')+fmt(Math.abs(rec.amount))+' ₸');
+  }
+
+  function bind(){
+    Array.prototype.forEach.call(document.querySelectorAll('[data-tab]'),function(b){
+      b.onclick=function(){S.tab=b.getAttribute('data-tab');render();};
+    });
+
+    on('qExp',function(){
+      var r=parseEntry(document.getElementById('qi').value,-1);
+      if(!r){toast('Нужна сумма');return;}
+      addTx(r);
+    });
+    on('qInc',function(){
+      var r=parseEntry(document.getElementById('qi').value,1);
+      if(!r){toast('Нужна сумма');return;}
+      addTx(r);
+    });
+    var qi=document.getElementById('qi');
+    if(qi)qi.onkeydown=function(e){if(e.key==='Enter'){var b=document.getElementById('qExp');if(b)b.click();}};
+
+    on('mMin',function(){S.mode='min';persist();render();});
+    on('mPlan',function(){S.mode='plan';persist();render();});
+
+    on('potBtn',function(){
+      var v=parseFloat(document.getElementById('potAdd').value);
+      if(!isFinite(v)||v<=0){toast('Нужна сумма');return;}
+      S.pot+=v;persist();render();toast('В копилке '+fmt(S.pot)+' ₸');
+    });
+    on('potSetBtn',function(){
+      S.pot=parseFloat(document.getElementById('potSet').value)||0;persist();render();toast('Сохранено');
+    });
+    on('balBtn',function(){
+      S.balance=parseFloat(document.getElementById('balSet').value)||0;persist();render();toast('Баланс обновлён');
+    });
+    on('foodSave',function(){
+      S.foodDay=parseFloat(document.getElementById('foodDay').value)||0;persist();render();toast('Сохранено');
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll('[data-close]'),function(b){
+      b.onclick=function(){
+        var id=b.getAttribute('data-close'),l=S.loans.filter(function(x){return x.id===id;})[0];
+        if(!l)return;
+        l.closed=true;
+        if(S.pot>=l.payoff){S.pot-=l.payoff;S.balance-=l.payoff;}
+        else{S.balance-=Math.max(0,l.payoff-S.pot);S.pot=0;}
+        S.tx.unshift({id:Date.now(),date:ruDate(new Date()),title:'Закрыт '+l.name,amount:-l.payoff});
+        persist();render();
+        toast('Освободилось '+fmt(l.payment)+' ₸ в месяц');
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-reopen]'),function(b){
+      b.onclick=function(){
+        var id=b.getAttribute('data-reopen'),l=S.loans.filter(function(x){return x.id===id;})[0];
+        if(l){l.closed=false;persist();render();}
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-edit]'),function(b){
+      b.onclick=function(){
+        var id=b.getAttribute('data-edit'),l=S.loans.filter(function(x){return x.id===id;})[0];
+        if(!l)return;
+        var p=prompt('Остаток к закрытию, '+l.name,l.payoff);
+        if(p===null)return;
+        var v=parseFloat(String(p).replace(/\s/g,''));
+        if(isFinite(v)&&v>=0){
+          l.payoff=v;
+          var q=prompt('Ежемесячный платёж',l.payment);
+          if(q!==null){var w=parseFloat(String(q).replace(/\s/g,''));if(isFinite(w))l.payment=w;}
+          persist();render();toast('Обновлено');
+        }
+      };
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll('[data-f]'),function(inp){
+      inp.onchange=function(){
+        var p=inp.getAttribute('data-f').split(':');
+        var arr=p[0]==='inc'?S.incomes:S.bills;
+        var o=arr.filter(function(x){return x.id===p[1];})[0];
+        if(!o)return;
+        var v=inp.value;
+        o[p[2]]=(p[2]==='title')?v:(parseFloat(v)||0);
+        if(p[0]==='bill'&&p[2]==='min'&&o.max<o.min)o.max=o.min;
+        persist();render();
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-del]'),function(b){
+      b.onclick=function(){
+        var p=b.getAttribute('data-del').split(':');
+        if(p[0]==='inc')S.incomes=S.incomes.filter(function(x){return x.id!==p[1];});
+        else S.bills=S.bills.filter(function(x){return x.id!==p[1];});
+        persist();render();
+      };
+    });
+    on('addBill',function(){
+      S.bills.push({id:'b'+Date.now(),day:1,title:'Новый платёж',min:0,max:0,on:true});persist();render();
+    });
+    on('addInc',function(){
+      S.incomes.push({id:'i'+Date.now(),day:1,title:'Подработка',min:0,max:0,plan:0,delay:0,on:true});persist();render();
+    });
+
+    on('expBtn',function(){
+      var d=document.getElementById('dump');
+      d.value=JSON.stringify({balance:S.balance,pot:S.pot,foodDay:S.foodDay,mode:S.mode,
+        loans:S.loans,bills:S.bills,incomes:S.incomes,tx:S.tx});
+      d.select();toast('Скопируй текст себе');
+    });
+    on('impBtn',function(){
+      try{
+        var d=JSON.parse(document.getElementById('dump').value);
+        for(var k in d){if(d[k]!==undefined)S[k]=d[k];}
+        persist();render();toast('Загружено');
+      }catch(e){toast('Не читается');}
+    });
+    on('resetBtn',function(){
+      if(!confirm('Вернуть всё к исходным данным?'))return;
+      S.balance=0;S.pot=0;S.foodDay=10000;S.mode='plan';S.tx=[];
+      S.loans=DEFAULT_LOANS.map(function(l){var c={};for(var k in l)c[k]=l[k];c.closed=false;return c;});
+      S.bills=DEFAULT_BILLS.slice();S.incomes=DEFAULT_INCOMES.slice();
+      persist();render();
+    });
+  }
+
+  load(render);
+})();
+</script>
+
+</body>
+</html>
