@@ -167,14 +167,16 @@
     {id:'i2', day:15, title:'Бонус',    min:500000, max:1500000, plan:700000, delay:3, on:true}
   ];
 
+  function clone(a){return a.map(function(o){var c={};for(var k in o)c[k]=o[k];return c;});}
+
   var S = {
     balance:0,
     pot:0,
     foodDay:10000,
     mode:'plan',          // 'min' пессимистично | 'plan' по ожиданию
     loans:DEFAULT_LOANS.map(function(l){var c={};for(var k in l)c[k]=l[k];c.closed=false;return c;}),
-    bills:DEFAULT_BILLS.slice(),
-    incomes:DEFAULT_INCOMES.slice(),
+    bills:clone(DEFAULT_BILLS),
+    incomes:clone(DEFAULT_INCOMES),
     tx:[],
     tab:'today',
     ready:false
@@ -186,7 +188,8 @@
   function persist(){
     var data={balance:S.balance,pot:S.pot,foodDay:S.foodDay,mode:S.mode,
               loans:S.loans,bills:S.bills,incomes:S.incomes,tx:S.tx.slice(0,400)};
-    try{ localStorage.setItem(KEY, JSON.stringify(data)); }catch(e){}
+    try{ localStorage.setItem(KEY, JSON.stringify(data)); }
+    catch(e){ try{toast('Не удалось сохранить');}catch(e2){} }
   }
   function load(cb){
     try{
@@ -282,19 +285,34 @@
     return out;
   }
 
-  function forecast(days){
-    var t=today(),bal=S.balance-S.pot,pts=[],min={v:bal,d:t};
-    for(var i=0;i<=days;i++){
-      var d=addDays(t,i);
-      if(i>0){
-        eventsOn(d).forEach(function(e){bal+=e.a;});
-        bal-=S.foodDay;
-      }
+  var HORIZON=60;
+
+  /* суммарное изменение баланса по каждому дню вперёд */
+  function netStream(days){
+    var t=today(),out=[0],i,s;
+    for(i=1;i<=days;i++){
+      s=0;
+      eventsOn(addDays(t,i)).forEach(function(e){s+=e.a;});
+      out.push(s);
+    }
+    return out;
+  }
+
+  /* прогон баланса при постоянной дневной трате per */
+  function simulate(days,per,net){
+    net=net||netStream(days);
+    var t=today(),bal=S.balance-S.pot,pts=[],min=null,i,d;
+    for(i=0;i<=days;i++){
+      if(i>0)bal+=net[i];
+      bal-=per;
+      d=addDays(t,i);
       pts.push({d:d,v:bal});
-      if(bal<min.v){min={v:bal,d:d};}
+      if(!min||bal<min.v)min={v:bal,d:d};
     }
     return {pts:pts,min:min,end:bal};
   }
+
+  function forecast(days){return simulate(days,S.foodDay);}
 
   function nextIncome(){
     var t=today();
@@ -309,18 +327,47 @@
     return null;
   }
 
-  function daily(){
-    var t=today(),ni=nextIncome();
-    var horizon=ni?ni.d:addDays(t,30);
-    var days=Math.max(1,Math.round((horizon-t)/86400000));
-    var res=0;
-    for(var i=0;i<=days;i++){
-      var d=addDays(t,i);
-      if(i===0)continue;
-      eventsOn(d).forEach(function(e){if(e.a<0)res-=e.a;});
+  /* максимальная дневная трата, при которой баланс ни разу не уходит в минус */
+  function maxDaily(days,net){
+    net=net||netStream(days);
+    var zero=simulate(days,0,net);
+    if(zero.min.v<0)return {per:0,gap:-zero.min.v,gapDay:zero.min.d,min:zero.min};
+    var cap=S.balance-S.pot,i;
+    for(i=1;i<=days;i++)if(net[i]>0)cap+=net[i];
+    var lo=0,hi=cap/(days+1)+1,mid;
+    for(i=0;i<40;i++){
+      mid=(lo+hi)/2;
+      if(simulate(days,mid,net).min.v>=0)lo=mid;else hi=mid;
     }
-    var free=S.balance-S.pot-res;
-    return {res:res,free:free,days:days,per:free/days,until:horizon,inc:ni};
+    return {per:lo,gap:0,gapDay:null,min:simulate(days,lo,net).min};
+  }
+
+  /* обязательные списания за ближайшие days дней */
+  function oblig(days){
+    var t=today(),s=0,i;
+    for(i=1;i<=days;i++)eventsOn(addDays(t,i)).forEach(function(e){if(e.a<0)s-=e.a;});
+    return s;
+  }
+
+  /* сколько уже потрачено сегодня по записям */
+  function spentToday(){
+    var t=today().getTime(),s=0;
+    S.tx.forEach(function(x){if(x.ts&&x.ts>=t&&x.amount<0)s-=x.amount;});
+    return s;
+  }
+
+  /* худший сценарий: минимальный доход, задержка, нулевые траты */
+  function worstGap(days){
+    var m=S.mode;S.mode='min';
+    var r=simulate(days,0);
+    S.mode=m;
+    return r.min;
+  }
+
+  function daily(){
+    var md=maxDaily(HORIZON);
+    return {per:md.per,gap:md.gap,gapDay:md.gapDay,min:md.min,
+            res:oblig(30),spent:spentToday(),inc:nextIncome()};
   }
 
   /* ---------- рендер ---------- */
@@ -347,18 +394,27 @@
   }
 
   function viewToday(){
-    var D=daily(),F=forecast(60),h='';
-    var per=D.per;
+    var D=daily(),F=forecast(HORIZON),h='';
+    var per=D.per,left=per-D.spent;
 
     h+='<div class="hero">';
-    h+='<div class="lbl">Можно потратить сегодня</div>';
-    h+='<div class="big num'+(per<0?' neg':'')+'">'+fmt(per)+' ₸</div>';
-    h+='<div class="sub">до '+(D.inc?esc(D.inc.inc.title).toLowerCase():'конца периода')+' '+ruDate(D.until)+' · '+D.days+' дн.</div>';
+    h+='<div class="lbl">Можно тратить в день</div>';
+    h+='<div class="big num'+(per<=0?' neg':'')+'">'+fmt(per)+' ₸</div>';
+    h+='<div class="sub">столько можно тратить каждый день, не уходя в минус за '+HORIZON+' дней'+
+       (D.inc?' · '+esc(D.inc.inc.title).toLowerCase()+' '+ruDate(D.inc.d):'')+'</div>';
     h+='<div class="heroRow">';
     h+='<div class="heroCell"><div class="k">На руках</div><div class="v num">'+fmt(S.balance)+'</div></div>';
-    h+='<div class="heroCell"><div class="k">Зарезервировано</div><div class="v num">'+fmt(D.res+S.pot)+'</div></div>';
-    h+='<div class="heroCell"><div class="k">Свободно</div><div class="v num">'+fmt(D.free)+'</div></div>';
+    h+='<div class="heroCell"><div class="k">Платежи 30 дн</div><div class="v num">'+fmt(D.res)+'</div></div>';
+    h+='<div class="heroCell"><div class="k">Осталось сегодня</div><div class="v num"'+
+       (left<0?' style="color:#F0A28E"':'')+'>'+fmt(left)+'</div></div>';
     h+='</div></div>';
+
+    var W=worstGap(HORIZON);
+    if(W.v<0){
+      h+='<div class="alert bad"><b>Худший сценарий: не хватает '+fmt(-W.v)+' ₸ к '+ruDate(W.d)+'</b><br>'+
+         'Так будет, если бонус придёт по нижней границе и с задержкой — даже при нулевых тратах. '+
+         'Договариваться о переносе платежа нужно сейчас, а не '+ruDate(W.d)+'.</div>';
+    }
 
     if(F.min.v<0){
       h+='<div class="alert bad"><b>Деньги закончатся '+ruDate(F.min.d)+'</b><br>'+
@@ -391,6 +447,7 @@
     // прогноз
     h+='<div class="card"><h3>Баланс на 60 дней<span class="aside">'+(S.mode==='min'?'пессимистично':'по плану')+'</span></h3>';
     h+=chart(F.pts);
+    h+='<div class="hint">График построен при трате '+fmt(S.foodDay)+' ₸ в день — это поле «еда» на вкладке «Регулярное». Цифра сверху отвечает на другой вопрос: сколько можно тратить, чтобы не уйти в минус.</div>';
     h+='<div class="grid2" style="margin-top:10px">';
     h+='<button class="btn ghost sm" id="mMin"'+(S.mode==='min'?' disabled':'')+'>Худший сценарий</button>';
     h+='<button class="btn ghost sm" id="mPlan"'+(S.mode==='plan'?' disabled':'')+'>Ожидаемый</button>';
@@ -512,6 +569,7 @@
     h+='<div class="meta">'+fmt(l.payment)+' ₸ '+loanDay(l)+'-го · '+l.months+' мес · закрыть за '+fmt(l.payoff)+'</div>';
     h+='</div><div style="display:flex;flex-direction:column;gap:5px">';
     h+='<button class="btn sm" data-close="'+l.id+'">Закрыт</button>';
+    h+='<button class="btn ghost sm" data-pay="'+l.id+'">Внести</button>';
     h+='<button class="btn ghost sm" data-edit="'+l.id+'">Правка</button>';
     h+='</div></div></div>';
     return h;
@@ -607,20 +665,21 @@
   function parseEntry(s,sign){
     s=(s||'').trim();
     if(!s)return null;
-    var forceInc=/^\+/.test(s);
-    s=s.replace(/^\+/,'').trim();
+    var forceInc=/(^|\s)\+\d/.test(s);
+    s=s.replace(/(^|\s)\+(?=\d)/,'$1').trim();
     var m=s.match(/-?\d[\d\s.,]*/);
     if(!m)return null;
-    var amt=parseFloat(m[0].replace(/[\s,]/g,''));
+    var raw=m[0].replace(/[\s.,]+$/,'');
+    var amt=parseFloat(raw.replace(/[\s,]/g,''));
     if(!isFinite(amt)||amt===0)return null;
-    var title=s.replace(m[0],'').trim().replace(/^[-–—:]+/,'').trim();
+    var title=s.replace(raw,'').trim().replace(/^[-–—:]+/,'').trim();
     if(!title)title=(forceInc||sign>0)?'Доход':'Расход';
     return {amount:Math.abs(amt)*((forceInc||sign>0)?1:-1),title:title};
   }
 
   function addTx(rec){
     var d=new Date();
-    S.tx.unshift({id:Date.now(),date:ruDate(d),title:rec.title,amount:rec.amount});
+    S.tx.unshift({id:Date.now(),ts:Date.now(),date:ruDate(d),title:rec.title,amount:rec.amount});
     S.balance+=rec.amount;
     persist();render();
     toast((rec.amount>0?'Доход ':'Расход ')+fmt(Math.abs(rec.amount))+' ₸');
@@ -666,10 +725,12 @@
       b.onclick=function(){
         var id=b.getAttribute('data-close'),l=S.loans.filter(function(x){return x.id===id;})[0];
         if(!l)return;
-        l.closed=true;
-        if(S.pot>=l.payoff){S.pot-=l.payoff;S.balance-=l.payoff;}
-        else{S.balance-=Math.max(0,l.payoff-S.pot);S.pot=0;}
-        S.tx.unshift({id:Date.now(),date:ruDate(new Date()),title:'Закрыт '+l.name,amount:-l.payoff});
+        if(!confirm('Закрыть «'+l.name+'» за '+fmt(l.payoff)+' ₸?'))return;
+        var ts=Date.now();
+        l.closed=true;l.paid=l.payoff;l.closeTx=ts;
+        S.balance-=l.payoff;
+        S.pot=Math.max(0,S.pot-l.payoff);
+        S.tx.unshift({id:ts,ts:ts,date:ruDate(new Date()),title:'Закрыт '+l.name,amount:-l.payoff});
         persist();render();
         toast('Освободилось '+fmt(l.payment)+' ₸ в месяц');
       };
@@ -677,7 +738,29 @@
     Array.prototype.forEach.call(document.querySelectorAll('[data-reopen]'),function(b){
       b.onclick=function(){
         var id=b.getAttribute('data-reopen'),l=S.loans.filter(function(x){return x.id===id;})[0];
-        if(l){l.closed=false;persist();render();}
+        if(!l)return;
+        if(l.paid)S.balance+=l.paid;
+        if(l.closeTx)S.tx=S.tx.filter(function(x){return x.id!==l.closeTx;});
+        delete l.paid;delete l.closeTx;
+        l.closed=false;persist();render();toast('Заём возвращён, деньги вернулись на баланс');
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-pay]'),function(b){
+      b.onclick=function(){
+        var id=b.getAttribute('data-pay'),l=S.loans.filter(function(x){return x.id===id;})[0];
+        if(!l)return;
+        var p=prompt('Сколько внести сверх графика в «'+l.name+'»?\nОстаток к закрытию: '+fmt(l.payoff),'');
+        if(p===null)return;
+        var v=parseFloat(String(p).replace(/[\s,]/g,''));
+        if(!isFinite(v)||v<=0){toast('Нужна сумма');return;}
+        if(v>=l.payoff){toast('Этого хватает на всё — жми «Закрыт»');return;}
+        var ts=Date.now();
+        l.payoff-=v;
+        S.balance-=v;
+        S.pot=Math.max(0,S.pot-v);
+        S.tx.unshift({id:ts,ts:ts,date:ruDate(new Date()),title:'Досрочно: '+l.name,amount:-v});
+        persist();render();
+        toast('Внесено '+fmt(v)+' ₸ · сверь новый остаток в Kaspi');
       };
     });
     Array.prototype.forEach.call(document.querySelectorAll('[data-edit]'),function(b){
@@ -740,7 +823,7 @@
       if(!confirm('Вернуть всё к исходным данным?'))return;
       S.balance=0;S.pot=0;S.foodDay=10000;S.mode='plan';S.tx=[];
       S.loans=DEFAULT_LOANS.map(function(l){var c={};for(var k in l)c[k]=l[k];c.closed=false;return c;});
-      S.bills=DEFAULT_BILLS.slice();S.incomes=DEFAULT_INCOMES.slice();
+      S.bills=clone(DEFAULT_BILLS);S.incomes=clone(DEFAULT_INCOMES);
       persist();render();
     });
   }
