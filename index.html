@@ -358,8 +358,13 @@
 
   /* сколько уже потрачено сегодня по записям */
   function spentToday(){
-    var t=today().getTime(),s=0;
-    S.tx.forEach(function(x){if(x.ts&&x.ts>=t&&x.amount<0)s-=x.amount;});
+    var t=today().getTime(),d=ruDate(new Date()),s=0;
+    S.tx.forEach(function(x){
+      if(x.amount>=0)return;
+      // у записей до обновления нет метки времени — для них сверяем дату
+      var isToday = x.ts ? (x.ts>=t) : (x.date===d);
+      if(isToday)s-=x.amount;
+    });
     return s;
   }
 
@@ -536,15 +541,14 @@
     var per=D.per,left=per-D.spent;
 
     h+='<div class="hero">';
-    h+='<div class="lbl">Можно тратить в день</div>';
-    h+='<div class="big num'+(per<=0?' neg':'')+'">'+fmt(per)+' ₸</div>';
-    h+='<div class="sub">столько можно тратить каждый день, не уходя в минус за '+HORIZON+' дней'+
+    h+='<div class="lbl">'+(left<0?'Перерасход за сегодня':'Можно потратить сегодня')+'</div>';
+    h+='<div class="big num'+(left<0?' neg':'')+'">'+fmt(left)+' ₸</div>';
+    h+='<div class="sub">норма '+fmt(per)+' ₸ в день, чтобы не уйти в минус за '+HORIZON+' дней'+
        (D.inc?' · '+esc(D.inc.inc.title).toLowerCase()+' '+ruDate(D.inc.d):'')+'</div>';
     h+='<div class="heroRow">';
     h+='<div class="heroCell"><div class="k">На руках</div><div class="v num">'+fmt(S.balance)+'</div></div>';
+    h+='<div class="heroCell"><div class="k">Потрачено сегодня</div><div class="v num">'+fmt(D.spent)+'</div></div>';
     h+='<div class="heroCell"><div class="k">Платежи 30 дн</div><div class="v num">'+fmt(D.res)+'</div></div>';
-    h+='<div class="heroCell"><div class="k">Осталось сегодня</div><div class="v num"'+
-       (left<0?' style="color:#F0A28E"':'')+'>'+fmt(left)+'</div></div>';
     h+='</div></div>';
 
     var W=worstGap(HORIZON);
