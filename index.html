@@ -377,6 +377,61 @@
             res:oblig(30),spent:spentToday(),inc:nextIncome()};
   }
 
+  /* ---------- когда закончатся долги ---------- */
+  var MON=['январь','февраль','март','апрель','май','июнь',
+           'июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+  function monthAfter(k){
+    var d=today(),x=new Date(d.getFullYear(),d.getMonth()+k,1);
+    return MON[x.getMonth()]+' '+x.getFullYear();
+  }
+
+  /* Помесячный каскад: обязательные платежи, затем всё свободное — в очередь досрочки.
+     Мелкие цели копятся и закрываются целиком, крупные гасятся частями (правила 4 и 5).
+     Займы с prio 0 досрочно не трогаются — они и определяют дату чаще всего. */
+  function payoffPlan(food){
+    if(food===undefined)food=S.foodDay;
+    var L=S.loans.filter(function(l){return !l.closed;}).map(function(l){
+      return {name:l.name,b:l.payoff,pm:l.payment,r:(l.rate||0)/1200,prio:l.prio,at:0};
+    });
+    if(!L.length)return null;
+    var inc=0;S.incomes.forEach(function(i){if(i.on)inc+=incAmt(i);});
+    var out=billsMonth()-kaspiTotal()+food*30;
+    var cash=S.balance,interest=0,m,done=null;
+    for(m=1;m<=72;m++){
+      var open=L.filter(function(l){return l.b>0.5;});
+      if(!open.length){done=m-1;break;}
+      cash+=inc-out;
+      open.forEach(function(l){
+        var pay=Math.min(l.pm,l.b);
+        cash-=pay;l.b-=pay;
+        interest+=l.b*l.r;l.b*=(1+l.r);
+        if(l.b<0.5){l.b=0;l.at=m;}
+      });
+      while(cash>0){
+        var q=L.filter(function(l){return l.b>0.5&&l.prio>0;})
+               .sort(function(a,b){return a.prio-b.prio;});
+        if(!q.length)break;
+        var t=q[0];
+        if(t.b<=100000){
+          if(cash>=t.b){cash-=t.b;t.b=0;t.at=m;} else break;
+        } else {
+          var p=Math.min(cash,t.b);t.b-=p;cash-=p;
+          if(t.b<0.5){t.b=0;t.at=m;}
+          break;
+        }
+      }
+    }
+    var mx=0;L.forEach(function(l){if(l.at>mx)mx=l.at;});
+    var lastOnes=L.filter(function(l){return l.at===mx&&mx>0;});
+    // в последний месяц может закрыться несколько займов; дату реально держит тот,
+    // что идёт по графику — досрочно его не ускорить
+    var block=null;
+    lastOnes.forEach(function(l){if(l.prio===0&&!block)block=l;});
+    if(!block&&lastOnes.length)block=lastOnes[0];
+    return {months:done,interest:interest,food:food,
+            blockName:block?block.name:'',blockSched:block?block.prio===0:false};
+  }
+
   /* ---------- сводка для Claude ---------- */
   function finContext(){
     var D=daily(),F=forecast(HORIZON),W=worstGap(HORIZON),t=today(),L=[];
@@ -422,6 +477,20 @@
       L.push('');
       L.push('== ПОСЛЕДНИЕ ОПЕРАЦИИ ==');
       S.tx.slice(0,10).forEach(function(x){L.push('  '+x.date+' — '+x.title+' '+(x.amount>0?'+':'')+fmt(x.amount));});
+    }
+    var P=payoffPlan(),P2=payoffPlan(Math.round(S.foodDay*0.6));
+    if(P){
+      L.push('');
+      L.push('== ПРОГНОЗ ВЫХОДА ИЗ ДОЛГОВ ==');
+      L.push('(посчитано самим приложением помесячным каскадом: обязательные платежи, всё свободное — в очередь досрочки, высвободившийся платёж переназначается дальше)');
+      if(P.months===null)L.push('При нынешних доходах и тратах долги не закрываются и за 6 лет.');
+      else{
+        L.push('Все долги закрыты через '+P.months+' мес — это '+monthAfter(P.months)+'. Процентов за это время: '+fmt(P.interest)+'.');
+        if(P.blockName)L.push('Дату определяет «'+P.blockName+'»'+(P.blockSched?
+          '. Этот заём гасится строго по графику и досрочно не ускоряется — поэтому экономия на расходах саму дату НЕ сдвинет, а только уменьшит проценты и оставит больше денег на руках. Не утверждай обратное, не проверив.':'.'));
+      }
+      if(P2&&P2.months!==null)
+        L.push('Для сравнения, если урезать еду до '+fmt(Math.round(S.foodDay*0.6))+' в день: срок '+P2.months+' мес, процентов '+fmt(P2.interest)+'.');
     }
     L.push('');
     L.push('== ПРАВИЛА МОЕЙ СТРАТЕГИИ, их нарушать нельзя ==');
@@ -604,6 +673,25 @@
     h+='<div class="heroCell"><div class="k">Переплата впереди</div><div class="v num">'+fmt(interest)+'</div></div>';
     h+='<div class="heroCell"><div class="k">Закрыто</div><div class="v num">'+closed.length+' / '+S.loans.length+'</div></div>';
     h+='</div></div>';
+
+    var P=payoffPlan();
+    if(P){
+      h+='<div class="card"><h3>Когда закончатся долги</h3>';
+      if(P.months===null){
+        h+='<div class="row"><div class="t"><b>Не закрываются и за 6 лет</b>'+
+           '<small>при нынешних доходах и тратах на досрочку не остаётся</small></div></div>';
+        h+='<div class="hint">Считается по режиму «'+(S.mode==='min'?'худший сценарий':'ожидаемый')+'». Урежь еду на вкладке «Регулярное» и посмотри, как сдвинется.</div>';
+      } else {
+        h+='<div class="row"><div class="t"><b>Свободен от долгов</b><small>через '+P.months+' мес</small></div>'+
+           '<div class="v num">'+monthAfter(P.months)+'</div></div>';
+        h+='<div class="row"><div class="t"><b>Процентов за это время</b></div><div class="v num">'+fmt(P.interest)+'</div></div>';
+        if(P.blockName){
+          h+='<div class="hint">Дату определяет «'+esc(P.blockName)+'»'+
+             (P.blockSched?' — этот заём идёт строго по графику и досрочно не гасится. Значит экономия на расходах уменьшит проценты и оставит деньги на руках, но саму дату не сдвинет.':'.')+'</div>';
+        }
+      }
+      h+='</div>';
+    }
 
     var q=open.filter(function(l){return l.prio>0;}).sort(function(a,b){return a.prio-b.prio;});
     if(q.length){
