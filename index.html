@@ -89,7 +89,7 @@
   .alert.ok{background:#E2EFE9;color:#134E3A}
 
   .tabs{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;z-index:20;padding-bottom:env(safe-area-inset-bottom)}
-  .tabs button{flex:1;background:none;border:none;padding:11px 1px 13px;color:var(--muted);font-size:9.5px;font-weight:600;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px}
+  .tabs button{flex:1;min-width:0;background:none;border:none;padding:11px 1px 13px;color:var(--muted);font-size:10px;font-weight:600;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;overflow:hidden;white-space:nowrap}
   .tabs button .ic{font-size:17px;line-height:1}
   .tabs button.on{color:var(--ink)}
 
@@ -223,6 +223,7 @@
     concerts:[],          // {id, ym:'2026-09', day, venue, title, fee}
     fee:100000,           // ставка за один концерт
     bonusShift:1,         // бонус за месяц приходит через N месяцев (1 = в следующем)
+    floor:6000,           // минимум на жизнь в день — еда, проезд, сигареты; ниже не бывает
     cushion:290523,       // цель подушки: платежи Kaspi 12-го + МФО 18-го
     cushionHave:0,
     since:0,              // dnum дня, с которого следим за просрочкой
@@ -249,7 +250,7 @@
   function snapshot(){
     return {balance:S.balance,pot:S.pot,foodDay:S.foodDay,mode:S.mode,
             loans:S.loans,bills:S.bills,incomes:S.incomes,tx:S.tx,
-            paid:S.paid,concerts:S.concerts,fee:S.fee,bonusShift:S.bonusShift,
+            paid:S.paid,concerts:S.concerts,fee:S.fee,bonusShift:S.bonusShift,floor:S.floor,
             cushion:S.cushion,cushionHave:S.cushionHave,since:S.since};
   }
   function load(cb){
@@ -281,6 +282,7 @@
     if(!S.concerts)S.concerts=[];
     if(typeof S.fee!=='number'||!S.fee)S.fee=100000;
     if(typeof S.bonusShift!=='number')S.bonusShift=1;
+    if(typeof S.floor!=='number')S.floor=6000;
     if(typeof S.cushion!=='number')S.cushion=290523;
     if(typeof S.cushionHave!=='number')S.cushionHave=0;
     S.tx.forEach(function(x){if(!x.cat)x.cat=guessCat(x.title,x.amount);});
@@ -583,6 +585,57 @@
             res:oblig(30),spent:spentToday(),inc:nextIncome()};
   }
 
+  /* Сколько можно тратить сегодня.
+     Голый maxDaily() отвечал на вопрос «сколько тебе позволено, чтобы не уйти
+     в минус» и при нехватке денег выдавал 0. Это не ответ: человек ест каждый
+     день. Поэтому норма никогда не опускается ниже S.floor — минимума на жизнь,
+     — а нехватка показывается отдельно, датой и суммой, с вариантами закрыть. */
+  function norm(){
+    var safe=maxDaily(HORIZON).per, floor=S.floor||0;
+    if(safe>=floor) return {per:safe, floored:false, short:0, safe:safe};
+    var r=simulate(HORIZON,floor);
+    return {per:floor, floored:true, safe:safe,
+            short:r.min.v<0?-r.min.v:0, day:r.min.d};
+  }
+
+  /* Что загнало баланс в минус. Дно часто приходится на день без событий —
+     деньги просто дотекли до нуля, — поэтому ищем крупнейший платёж
+     в предшествующие дни, а не строго в день провала. */
+  function whatBreaks(d){
+    var big=null,bigD=null,i,dd;
+    for(i=0;i<=12;i++){
+      dd=addDays(d,-i);
+      if(dnum(dd)<dnum(today()))break;
+      eventsOn(dd).forEach(function(e){
+        if(e.a<0&&(!big||e.a<big.a)){big=e;bigD=new Date(dd);}
+      });
+    }
+    return big?{e:big,d:bigD}:null;
+  }
+
+  /* Конкретные способы закрыть нехватку — по убыванию реалистичности. */
+  function fixes(short,day){
+    var out=[],gigs=Math.ceil(short/(S.fee||100000));
+    out.push({t:'Отработать ещё '+gigs+' '+plural(gigs,'концерт','концерта','концертов'),
+              v:'+'+fmt(gigs*(S.fee||100000))+' ₸', good:true, act:'gigs'});
+    // копилка на досрочку — это твои же деньги, просто отложенные
+    if(S.pot>0)
+      out.push({t:'Вернуть из копилки на досрочку', v:fmt(Math.min(S.pot,short))+' ₸',
+                good:S.pot>=short, act:'pot'});
+    if(S.cushionHave>0)
+      out.push({t:'Взять из подушки', v:fmt(Math.min(S.cushionHave,short))+' ₸',
+                good:S.cushionHave>=short, act:'cush'});
+    else if(!S.pot)
+      out.push({t:'Взять из подушки', v:'пусто', good:false});
+    var safe=maxDaily(HORIZON).per;
+    if(safe>0)out.push({t:'Урезать до '+fmt(safe)+' ₸ в день',
+                        v:'ниже минимума', good:false});
+    else out.push({t:'Урезать траты', v:'не спасёт даже ноль', good:false});
+    var b=day?whatBreaks(day):null;
+    if(b)out.push({t:'Перенести «'+b.e.t+'» — '+fmt(b.e.plan)+' ₸', v:ruDate(b.d), good:false});
+    return out;
+  }
+
   /* Типичный месячный доход для каскада. Бонус берётся по среднему числу
      концертов за внесённые месяцы — если их нет, по ручным полям дохода. */
   function typicalIncome(){
@@ -696,7 +749,16 @@
     L.push('Подушка на платежи: '+fmt(S.cushionHave)+' из '+fmt(S.cushion)+
            ' (цель — один месяц платежей по кредитам: Kaspi 12-го и МФО 18-го).');
     L.push('Еда: '+fmt(S.foodDay)+' в день ('+fmt(S.foodDay*30)+' в месяц)');
-    L.push('Можно тратить в день, не уходя в минус за 60 дней: '+fmt(D.per));
+    var NN=norm();
+    L.push('Минимум на жизнь (еда, проезд, сигареты): '+fmt(S.floor)+' в день — меньше тратить я не могу.');
+    if(NN.floored){
+      L.push('ГЛАВНАЯ ПРОБЛЕМА: даже на этом минимуме '+ruDate(NN.day)+' не хватает '+fmt(NN.short)+'.');
+      L.push('Математический максимум без ухода в минус — '+fmt(NN.safe)+' в день, но это ниже минимума на жизнь, то есть нереально.');
+      L.push('Мне нужен не совет экономить, а способ добрать '+fmt(NN.short)+' к '+ruDate(NN.day)+
+             ' — например '+Math.ceil(NN.short/(S.fee||100000))+' доп. концертов или перенос платежа.');
+    } else {
+      L.push('Можно тратить в день, не уходя в минус за 60 дней: '+fmt(NN.per));
+    }
     L.push('Обязательные платежи ближайших 30 дней: '+fmt(D.res));
     L.push('Прогноз при текущей трате: минимум '+fmt(F.min.v)+' наступит '+ruDate(F.min.d));
     if(W.v<0)L.push('РИСК: в худшем сценарии (доход по нижней границе и с задержкой, нулевые траты) не хватает '+fmt(-W.v)+' к '+ruDate(W.d)+'.');
@@ -802,27 +864,57 @@
 
   function tabsHtml(){
     var T=[['today','Сегодня','◉'],['debts','Долги','▤'],['hist','История','▦'],
-           ['gigs','Концерты','♪'],['fixed','Регулярное','⟳'],['ask','Спросить','✦'],['setup','Настройки','⚙']];
+           ['gigs','Концерты','♪'],['fixed','Платежи','⟳'],['ask','Совет','✦'],['setup','Ещё','⚙']];
     return '<nav class="tabs">'+T.map(function(t){
       return '<button data-tab="'+t[0]+'" class="'+(S.tab===t[0]?'on':'')+'"><span class="ic">'+t[2]+'</span>'+t[1]+'</button>';
     }).join('')+'</nav>';
   }
 
   function viewToday(){
-    var D=daily(),h='',per=D.per,left=per-D.spent;
+    var D=daily(),N=norm(),h='',per=N.per,left=per-D.spent;
     var od=overdueList(),odSum=overdueTotal();
 
     h+='<div class="hero">';
     h+='<div class="lbl">'+(left<0?'Перерасход за сегодня':'Можно потратить сегодня')+'</div>';
     h+='<div class="big num'+(left<0?' neg':'')+'">'+fmt(left)+' ₸</div>';
-    h+='<div class="sub">норма '+fmt(per)+' ₸ в день, чтобы не уйти в минус за '+HORIZON+' дней'+
+    h+='<div class="sub">'+(N.floored
+        ? 'это минимум на жизнь — еда, проезд, сигареты. Денег на него не хватает, смотри ниже'
+        : 'норма '+fmt(per)+' ₸ в день, чтобы не уйти в минус за '+HORIZON+' дней')+
        (D.inc?' · '+esc(D.inc.inc.title).toLowerCase()+' '+ruDate(D.inc.d):'')+'</div>';
     h+='<div class="heroRow">';
     h+='<div class="heroCell"><div class="k">На счету</div><div class="v num">'+fmt(S.balance)+'</div></div>';
     h+='<div class="heroCell"><div class="k">'+(odSum>0?'Из них должен':'Потрачено сегодня')+'</div><div class="v num">'+
        fmt(odSum>0?odSum:D.spent)+'</div></div>';
-    h+='<div class="heroCell"><div class="k">Платежи 30 дн</div><div class="v num">'+fmt(D.res)+'</div></div>';
+    h+='<div class="heroCell"><div class="k">Свободно</div><div class="v num">'+fmt(spendable())+'</div></div>';
     h+='</div></div>';
+
+    // ---- нехватка: сумма, дата, откуда взять ----
+    if(N.floored&&N.short>0){
+      h+='<div class="card" style="border-color:var(--bad)">';
+      h+='<h3 style="color:var(--bad)">'+ruDate(N.day)+' не хватит '+fmt(N.short)+' ₸</h3>';
+      h+='<div class="mini" style="margin-bottom:9px">Так будет, если тратить '+fmt(S.floor)+
+         ' ₸ в день — твой минимум на жизнь. Меньше тратить нельзя, значит вопрос не в экономии, а в том, откуда взять недостающее.</div>';
+      h+='<div class="ol" style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0"><span>На счету</span><span>'+fmt(S.balance)+'</span></div>';
+      if(odSum>0)h+='<div class="ol" style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0"><span>Из них уже должен</span><span style="color:var(--bad)">−'+fmt(odSum)+'</span></div>';
+      if(S.pot>0)h+='<div class="ol" style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0"><span>Отложено в копилку на досрочку</span><span>−'+fmt(S.pot)+'</span></div>';
+      h+='<div class="ol" style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0;font-weight:700"><span>Свободно</span><span>'+fmt(spendable())+'</span></div>';
+      var bk2=bonusKnown();
+      if(bk2)h+='<div class="ol" style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0"><span>Бонус '+ruDate(bk2.d)+(bk2.known?' ('+bk2.n+' конц.)':' (оценка)')+'</span><span>+'+fmt(bk2.shown)+'</span></div>';
+      h+='<div class="sep"></div>';
+      h+='<div class="mini" style="margin-bottom:6px">Чем закрыть:</div>';
+      fixes(N.short,N.day).forEach(function(x){
+        h+='<div class="ol" style="display:flex;justify-content:space-between;font-size:13.5px;padding:5px 0;border-bottom:1px solid var(--soft)">'+
+           '<span>'+esc(x.t)+'</span><span style="font-weight:600;color:'+(x.good?'var(--good)':'var(--muted)')+'">'+esc(x.v)+'</span></div>';
+        if(x.act==='pot')h+='<button class="btn ghost sm" id="potBack" style="margin:4px 0 6px;width:100%">Вернуть копилку в оборот</button>';
+        if(x.act==='cush')h+='<button class="btn ghost sm" id="cushBack" style="margin:4px 0 6px;width:100%">Распечатать подушку</button>';
+      });
+      var fx=fixes(N.short,N.day),nGood=0;
+      fx.forEach(function(x){if(x.good)nGood++;});
+      h+='<div class="hint">'+(nGood>1
+        ? 'Зелёным отмечено то, чего хватает, чтобы закрыть дыру целиком. Деньги из копилки решают вопрос сегодня, но откладывают погашение; концерты решают его насовсем.'
+        : 'Зелёным отмечено то, чего хватает. Серое показано специально — чтобы было видно, что эти пути не спасают, и ты не тратил на них время.')+'</div>';
+      h+='</div>';
+    }
 
     // ---- к оплате: просроченное и сегодняшнее ----
     if(od.length){
@@ -830,8 +922,8 @@
       od.forEach(function(o){
         var late=dnum(o.d)<dnum(today());
         h+='<div class="due'+(late?' late':'')+'">';
-        h+='<div class="i"><b>'+esc(o.e.t)+'</b><small>'+(late?'просрочено с ':'сегодня, ')+
-           (late?ruDate(o.d):'')+'</small></div>';
+        h+='<div class="i"><b>'+esc(o.e.t)+'</b><small>'+
+           (late?'просрочено с '+ruDate(o.d):'срок сегодня')+'</small></div>';
         h+='<div class="a num">'+fmt(o.e.plan)+'</div>';
         h+='<button class="btn sm" data-paid="'+esc(o.e.key)+'" data-amt="'+o.e.plan+'" data-ttl="'+esc(o.e.t)+'">Оплачено</button>';
         h+='</div>';
@@ -862,11 +954,11 @@
          'Так будет, если доход придёт по нижней границе и с задержкой — даже при нулевых тратах. '+
          'Договариваться о переносе платежа нужно сейчас, а не '+ruDate(W.d)+'.</div>';
     }
-    if(F.min.v<0){
+    if(F.min.v<0&&!N.floored){
       h+='<div class="alert bad"><b>Деньги закончатся '+ruDate(F.min.d)+'</b><br>'+
          'При трате '+fmt(S.foodDay)+' ₸ в день прогноз уходит в минус до '+fmt(F.min.v)+' ₸. '+
          'Безопасная норма — '+fmt(per)+' ₸ в день.</div>';
-    } else if(F.min.v<50000){
+    } else if(F.min.v>=0&&F.min.v<50000){
       h+='<div class="alert warn">Самая тонкая точка — '+ruDate(F.min.d)+', останется '+fmt(F.min.v)+' ₸. Запас почти нулевой.</div>';
     }
 
@@ -967,15 +1059,19 @@
     var free=freeCash(),h='';
     h+='<div class="card"><h3>Что делать с деньгами</h3>';
 
+    var safe=maxDaily(HORIZON).per;
     if(free<0){
-      h+='<div class="alert bad" style="margin:0 0 10px"><b>Денег не хватает: '+fmt(-free)+' ₸</b><br>'+
-         'При трате '+fmt(S.foodDay)+' ₸ в день баланс уйдёт в минус. Распределять пока нечего — сначала надо сократить траты.</div>';
-      h+='<div class="ol" style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span>Безопасная трата в день</span><span><b>'+fmt(per)+' ₸</b></span></div>';
-      h+='<div class="ol" style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span>Сейчас заложено</span><span>'+fmt(S.foodDay)+' ₸</span></div>';
-      h+='<div class="ol" style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span>Резать нужно на</span><span>'+fmt(S.foodDay-per)+' ₸ в день</span></div>';
-      h+='<button class="btn" id="setPer" style="margin-top:10px;width:100%">Поставить норму '+fmt(per)+' ₸ в день</button>';
-      h+='<div class="hint">Это не совет затянуть пояс, а арифметика: при нынешних платежах '+fmt(per)+
-         ' ₸ в день — максимум, при котором ты не уходишь в минус за '+HORIZON+' дней.</div></div>';
+      if(safe>=S.floor){
+        h+='<div class="alert warn" style="margin:0 0 10px"><b>Тратишь больше, чем можешь</b><br>'+
+           'Заложено '+fmt(S.foodDay)+' ₸ в день, а выдержишь '+fmt(safe)+
+           '. Это выше минимума на жизнь, так что вопрос решается экономией.</div>';
+        h+='<div class="ol" style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span>Резать нужно на</span><span>'+fmt(S.foodDay-safe)+' ₸ в день</span></div>';
+        h+='<button class="btn" id="setPer" style="margin-top:10px;width:100%">Поставить '+fmt(safe)+' ₸ в день</button>';
+      } else {
+        h+='<div class="alert bad" style="margin:0 0 10px"><b>Экономией это не решается</b><br>'+
+           'Даже на минимуме '+fmt(S.floor)+' ₸ в день денег не хватает. Что делать — в красном блоке выше.</div>';
+      }
+      h+='<div class="hint">Свободных денег нет: всё, что есть, уже расписано по платежам на '+HORIZON+' дней вперёд.</div></div>';
       return h;
     }
 
@@ -1362,13 +1458,21 @@
        fmt(loansOnDay(12))+' ₸ 12-го числа (Kaspi) и '+fmt(loansOnDay(18))+
        ' ₸ 18-го (МФО Freedom). Когда кредит закрывается, суммы уменьшаются автоматически.</div></div>';
 
-    // еда
+    // траты на жизнь
     var m=S.foodDay*30;
-    h+='<div class="card"><h3>Еда<span class="aside">'+fmt(m)+' ₸/мес</span></h3>';
-    h+='<div class="inline"><input type="number" id="foodDay" value="'+S.foodDay+'" inputmode="numeric">'+
-       '<button class="btn" id="foodSave">Сохранить</button></div>';
-    h+='<div class="hint">Сейчас '+fmt(S.foodDay)+' ₸ в день. При переходе на готовую еду 6 000 ₸/день выйдет '+
-       fmt(6000*30)+' ₸ в месяц — это '+fmt(m-6000*30)+' ₸ высвобождается на погашение.</div></div>';
+    h+='<div class="card"><h3>Траты на жизнь<span class="aside">'+fmt(m)+' ₸/мес</span></h3>';
+    h+='<div class="head" style="grid-template-columns:1fr 1fr"><span>Трачу в день</span><span>Минимум на жизнь</span></div>';
+    h+='<div class="grid2">';
+    h+='<input type="number" id="foodDay" value="'+S.foodDay+'" inputmode="numeric">';
+    h+='<input type="number" id="floorDay" value="'+S.floor+'" inputmode="numeric">';
+    h+='</div>';
+    h+='<button class="btn" id="foodSave" style="margin-top:8px;width:100%">Сохранить</button>';
+    h+='<div class="hint"><b>Трачу в день</b> — реальный расход, по нему строится лента. Сейчас '+
+       fmt(S.foodDay)+' ₸, это '+fmt(m)+' ₸ в месяц.<br><br>'+
+       '<b>Минимум на жизнь</b> — еда, проезд, сигареты: ниже этого не прожить. '+
+       'Приложение никогда не предложит тратить меньше и не скажет «0 в день». '+
+       'Если денег не хватает даже на минимум, это не повод экономить дальше — '+
+       'значит надо добрать дохода, и на главной будет написано сколько.</div></div>';
 
     return h;
   }
@@ -1618,8 +1722,16 @@
     });
 
     /* ---- распределитель ---- */
+    on('potBack',function(){
+      if(!confirm('Вернуть '+fmt(S.pot)+' ₸ из копилки в оборот?\nОни перестанут копиться на досрочное погашение.'))return;
+      var v=S.pot;S.pot=0;persist();render();toast('Возвращено '+fmt(v)+' ₸');
+    });
+    on('cushBack',function(){
+      if(!confirm('Распечатать подушку на '+fmt(S.cushionHave)+' ₸?\nОна для платежей по кредитам — после этого запаса не останется.'))return;
+      var v=S.cushionHave;S.cushionHave=0;persist();render();toast('Подушка распечатана: '+fmt(v)+' ₸');
+    });
     on('setPer',function(){
-      var per=maxDaily(HORIZON).per;
+      var per=Math.max(maxDaily(HORIZON).per,S.floor||0);
       S.foodDay=Math.floor(per/100)*100;
       persist();render();toast('Норма '+fmt(S.foodDay)+' ₸ в день');
     });
@@ -1727,7 +1839,12 @@
       S.balance=parseFloat(document.getElementById('balSet').value)||0;persist();render();toast('Баланс обновлён');
     });
     on('foodSave',function(){
-      S.foodDay=parseFloat(document.getElementById('foodDay').value)||0;persist();render();toast('Сохранено');
+      var fd=parseFloat(document.getElementById('foodDay').value);
+      var fl=document.getElementById('floorDay');
+      if(isFinite(fd)&&fd>=0)S.foodDay=fd;
+      if(fl){var v=parseFloat(fl.value);if(isFinite(v)&&v>=0)S.floor=v;}
+      if(S.foodDay<S.floor)S.foodDay=S.floor;
+      persist();render();toast('Сохранено');
     });
 
     Array.prototype.forEach.call(document.querySelectorAll('[data-close]'),function(b){
@@ -1838,7 +1955,7 @@
       if(!confirm('Вернуть всё к исходным данным?'))return;
       S.balance=0;S.pot=0;S.foodDay=10000;S.mode='plan';S.tx=[];
       S.paid={};S.concerts=[];S.fee=100000;S.bonusShift=1;
-      S.cushion=290523;S.cushionHave=0;S.since=dnum(today());
+      S.cushion=290523;S.cushionHave=0;S.since=dnum(today());S.floor=6000;
       S.loans=DEFAULT_LOANS.map(function(l){var c={};for(var k in l)c[k]=l[k];c.closed=false;return c;});
       S.bills=clone(DEFAULT_BILLS);S.incomes=clone(DEFAULT_INCOMES);
       persist();render();
