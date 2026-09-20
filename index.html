@@ -149,6 +149,9 @@
   .opt .oh{display:flex;justify-content:space-between;gap:8px;align-items:baseline;margin-bottom:5px}
   .opt .oh b{font-size:14px}
   .opt .ol{display:flex;justify-content:space-between;font-size:13px;padding:2px 0;color:var(--muted)}
+  .fixrow{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding:6px 0;border-bottom:1px solid var(--soft)}
+  .fixrow span:first-child{min-width:0;flex:1}
+  .fixrow span:last-child{white-space:nowrap;font-weight:600}
   .opt .ol span:last-child{font-weight:600;color:var(--ink)}
 
   .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:88px;background:var(--ink);color:#fff;padding:10px 16px;border-radius:22px;font-size:14px;z-index:40;opacity:0;transition:opacity .18s}
@@ -593,24 +596,35 @@
   function norm(){
     var safe=maxDaily(HORIZON).per, floor=S.floor||0;
     if(safe>=floor) return {per:safe, floored:false, short:0, safe:safe};
-    var r=simulate(HORIZON,floor);
+    var r=simulate(HORIZON,floor),i,first=null;
+    // Дедлайн — это ПЕРВЫЙ день ухода в минус, а не самая глубокая точка.
+    // Показывать дно значило называть дату на месяц дальше настоящей
+    // и сумму, которую незачем собирать к тому сроку.
+    for(i=0;i<r.pts.length;i++){ if(r.pts[i].v<0){ first=r.pts[i]; break; } }
     return {per:floor, floored:true, safe:safe,
-            short:r.min.v<0?-r.min.v:0, day:r.min.d};
+            short:first?-first.v:0, day:first?first.d:null,
+            worst:r.min.v<0?-r.min.v:0, worstDay:r.min.d};
   }
 
-  /* Что загнало баланс в минус. Дно часто приходится на день без событий —
-     деньги просто дотекли до нуля, — поэтому ищем крупнейший платёж
-     в предшествующие дни, а не строго в день провала. */
+  /* Какой платёж не удастся оплатить. Сначала смотрим сам день провала —
+     именно он не пройдёт. Если в этот день платежей нет (деньги просто
+     дотекли до нуля), отступаем назад к ближайшему крупному дню. */
+  function dayOut(d){
+    var sum=0,names=[];
+    eventsOn(d).forEach(function(e){if(e.a<0){sum-=e.a;names.push(e.t);}});
+    return sum>0?{t:names.join(' + '),plan:sum,d:new Date(d)}:null;
+  }
   function whatBreaks(d){
-    var big=null,bigD=null,i,dd;
-    for(i=0;i<=12;i++){
+    var own=dayOut(d);
+    if(own)return {e:own,d:own.d};
+    var best=null,i,dd,o;
+    for(i=1;i<=12;i++){
       dd=addDays(d,-i);
       if(dnum(dd)<dnum(today()))break;
-      eventsOn(dd).forEach(function(e){
-        if(e.a<0&&(!big||e.a<big.a)){big=e;bigD=new Date(dd);}
-      });
+      o=dayOut(dd);
+      if(o&&(!best||o.plan>best.plan))best=o;
     }
-    return big?{e:big,d:bigD}:null;
+    return best?{e:best,d:best.d}:null;
   }
 
   /* Конкретные способы закрыть нехватку — по убыванию реалистичности. */
@@ -632,7 +646,7 @@
                         v:'ниже минимума', good:false});
     else out.push({t:'Урезать траты', v:'не спасёт даже ноль', good:false});
     var b=day?whatBreaks(day):null;
-    if(b)out.push({t:'Перенести «'+b.e.t+'» — '+fmt(b.e.plan)+' ₸', v:ruDate(b.d), good:false});
+    if(b)out.push({t:'Перенести «'+b.e.t+'»', v:ruDate(b.d), good:false});
     return out;
   }
 
@@ -892,8 +906,11 @@
     if(N.floored&&N.short>0){
       h+='<div class="card" style="border-color:var(--bad)">';
       h+='<h3 style="color:var(--bad)">'+ruDate(N.day)+' не хватит '+fmt(N.short)+' ₸</h3>';
-      h+='<div class="mini" style="margin-bottom:9px">Так будет, если тратить '+fmt(S.floor)+
-         ' ₸ в день — твой минимум на жизнь. Меньше тратить нельзя, значит вопрос не в экономии, а в том, откуда взять недостающее.</div>';
+      h+='<div class="mini" style="margin-bottom:9px">Это ближайший срок, когда деньги кончатся, если тратить '+fmt(S.floor)+
+         ' ₸ в день — твой минимум на жизнь. Меньше тратить нельзя, значит вопрос не в экономии, а в том, откуда взять недостающее к этой дате.</div>';
+      var bad2=whatBreaks(N.day);
+      if(bad2)h+='<div class="mini" style="margin-bottom:9px">Ломается на платеже «'+esc(bad2.e.t)+'» '+
+         fmt(bad2.e.plan)+' ₸ '+ruDate(bad2.d)+'.</div>';
       h+='<div class="ol" style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0"><span>На счету</span><span>'+fmt(S.balance)+'</span></div>';
       if(odSum>0)h+='<div class="ol" style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0"><span>Из них уже должен</span><span style="color:var(--bad)">−'+fmt(odSum)+'</span></div>';
       if(S.pot>0)h+='<div class="ol" style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0"><span>Отложено в копилку на досрочку</span><span>−'+fmt(S.pot)+'</span></div>';
@@ -903,16 +920,22 @@
       h+='<div class="sep"></div>';
       h+='<div class="mini" style="margin-bottom:6px">Чем закрыть:</div>';
       fixes(N.short,N.day).forEach(function(x){
-        h+='<div class="ol" style="display:flex;justify-content:space-between;font-size:13.5px;padding:5px 0;border-bottom:1px solid var(--soft)">'+
-           '<span>'+esc(x.t)+'</span><span style="font-weight:600;color:'+(x.good?'var(--good)':'var(--muted)')+'">'+esc(x.v)+'</span></div>';
+        h+='<div class="fixrow"><span>'+esc(x.t)+'</span>'+
+           '<span style="color:'+(x.good?'var(--good)':'var(--muted)')+'">'+esc(x.v)+'</span></div>';
         if(x.act==='pot')h+='<button class="btn ghost sm" id="potBack" style="margin:4px 0 6px;width:100%">Вернуть копилку в оборот</button>';
         if(x.act==='cush')h+='<button class="btn ghost sm" id="cushBack" style="margin:4px 0 6px;width:100%">Распечатать подушку</button>';
       });
       var fx=fixes(N.short,N.day),nGood=0;
       fx.forEach(function(x){if(x.good)nGood++;});
       h+='<div class="hint">'+(nGood>1
-        ? 'Зелёным отмечено то, чего хватает, чтобы закрыть дыру целиком. Деньги из копилки решают вопрос сегодня, но откладывают погашение; концерты решают его насовсем.'
+        ? 'Зелёным отмечено то, чего хватает на ближайший срок. Деньги из копилки решают вопрос сегодня, но откладывают погашение; концерты решают его насовсем.'
         : 'Зелёным отмечено то, чего хватает. Серое показано специально — чтобы было видно, что эти пути не спасают, и ты не тратил на них время.')+'</div>';
+      if(N.worst>N.short+1){
+        var gigsAll=Math.ceil(N.worst/(S.fee||100000));
+        h+='<div class="alert warn" style="margin:10px 0 0">Это только ближайшая дыра. Если ничего не менять, к '+
+           ruDate(N.worstDay)+' она дорастёт до '+fmt(N.worst)+' ₸ — это уже '+gigsAll+' '+
+           plural(gigsAll,'концерт','концерта','концертов')+'. Считай '+ruDate(N.day)+' дедлайном, а не концом проблемы.</div>';
+      }
       h+='</div>';
     }
 
