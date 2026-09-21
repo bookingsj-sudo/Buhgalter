@@ -901,6 +901,15 @@
     h+='<div class="heroCell"><div class="k">Свободно</div><div class="v num">'+fmt(spendable())+'</div></div>';
     h+='</div></div>';
 
+    // ---- быстрый ввод ----
+    h+='<div class="card"><h3>Записать</h3>';
+    h+='<input type="text" id="qi" placeholder="такси 1500 · обед 4200 · подработка +50000">';
+    h+='<div class="grid2" style="margin-top:8px">';
+    h+='<button class="btn" id="qExp">Расход</button>';
+    h+='<button class="btn ghost" id="qInc">Доход</button>';
+    h+='</div>';
+    h+='<div class="hint">Пиши как удобно: сумма и что это. Знак «+» сразу пишет доход. Категория определится сама, поправить можно в «Истории».</div></div>';
+
     // ---- нехватка: сумма, дата, откуда взять ----
     if(N.floored&&N.short>0){
       h+='<div class="card" style="border-color:var(--bad)">';
@@ -997,15 +1006,6 @@
       h+='<div class="alert warn"><b>17–18 числа: '+fmt(crunch)+' ₸ за два дня</b><br>'+
          'Жильё и платёж в МФО стоят вплотную. Если бонус задержится до 19–20-го, оба платежа провалятся. Эту сумму держи отложенной с прошлого месяца.</div>';
     }
-
-    // ---- быстрый ввод ----
-    h+='<div class="card"><h3>Записать</h3>';
-    h+='<input type="text" id="qi" placeholder="такси 1500 · обед 4200 · подработка +50000">';
-    h+='<div class="grid2" style="margin-top:8px">';
-    h+='<button class="btn" id="qExp">Расход</button>';
-    h+='<button class="btn ghost" id="qInc">Доход</button>';
-    h+='</div>';
-    h+='<div class="hint">Пиши как удобно: сумма и что это. Знак «+» сразу пишет доход. Категория определится сама, поправить можно в «Истории».</div></div>';
 
     // ---- распределитель ----
     h+=allocCard(per);
