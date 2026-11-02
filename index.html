@@ -165,7 +165,7 @@
   /* ---------- дефолтные данные ---------- */
   var DEFAULT_LOANS = [
     // Freedom / МФО — платёж 18-го
-    {id:'MFO', name:'МФО Freedom', payoff:501704, payment:50642, months:12, rate:37.0, prio:6, day:18},
+    {id:'MFO', name:'МФО Freedom', payoff:501704, payment:50642, months:12, rate:37.0, prio:7, day:18},
     // рассрочка (0%)
     {id:'R1', name:'Рассрочка 1',  payoff:66617,  payment:4441,  months:15, rate:0,    prio:0},
     {id:'R2', name:'Рассрочка 2',  payoff:218719, payment:72906, months:3,  rate:0,    prio:0},
@@ -173,26 +173,31 @@
     {id:'R4', name:'Рассрочка 4',  payoff:34484,  payment:11495, months:3,  rate:0,    prio:0},
     // кредиты
     {id:'K1',  name:'Кредит 1',  payoff:10026,  payment:5088,  months:2,  rate:11.8, prio:0},
-    {id:'K2',  name:'Кредит 2',  payoff:86973,  payment:10089, months:10, rate:33.6, prio:5},
+    {id:'K2',  name:'Кредит 2',  payoff:86973,  payment:10089, months:10, rate:33.6, prio:6},
     {id:'K3',  name:'Кредит 3',  payoff:30002,  payment:5163,  months:6,  rate:11.0, prio:0},
     {id:'K4',  name:'Кредит 4',  payoff:13849,  payment:2053,  months:7,  rate:11.2, prio:0},
-    {id:'K5',  name:'Кредит 5',  payoff:43026,  payment:4991,  months:10, rate:33.6, prio:3},
+    {id:'K5',  name:'Кредит 5',  payoff:43026,  payment:4991,  months:10, rate:33.6, prio:4},
     {id:'K6',  name:'Кредит 6',  payoff:129922, payment:11473, months:12, rate:10.9, prio:0},
     {id:'K7',  name:'Кредит 7',  payoff:8942,   payment:3040,  months:3,  rate:12.0, prio:0},
     {id:'K8',  name:'Кредит 8',  payoff:19901,  payment:4091,  months:5,  rate:11.0, prio:0},
     {id:'K9',  name:'Кредит 9',  payoff:9917,   payment:2040,  months:5,  rate:11.2, prio:0},
     {id:'K10', name:'Кредит 10', payoff:13880,  payment:2057,  months:7,  rate:11.2, prio:0},
     {id:'K11', name:'Кредит 11', payoff:46140,  payment:5023,  months:11, rate:37.6, prio:1},
-    {id:'K12', name:'Кредит 12', payoff:352537, payment:14398, months:48, rate:38.6, prio:8},
-    {id:'K13', name:'Кредит 13', payoff:150318, payment:9039,  months:24, rate:38.1, prio:7},
+    {id:'K12', name:'Кредит 12', payoff:352537, payment:14398, months:48, rate:38.6, prio:11},
+    {id:'K13', name:'Кредит 13', payoff:150318, payment:9039,  months:24, rate:38.1, prio:8},
     {id:'K14', name:'Кредит 14', payoff:151863, payment:10880, months:15, rate:11.0, prio:0},
-    {id:'K15', name:'Кредит 15', payoff:131829, payment:9029,  months:17, rate:21.0, prio:9},
-    {id:'K16', name:'Кредит 16', payoff:80574,  payment:10035, months:9,  rate:28.2, prio:4},
+    {id:'K15', name:'Кредит 15', payoff:131829, payment:9029,  months:17, rate:21.0, prio:13},
+    {id:'K16', name:'Кредит 16', payoff:80574,  payment:10035, months:9,  rate:28.2, prio:5},
     {id:'K17', name:'Кредит 17', payoff:50746,  payment:5141,  months:12, rate:37.7, prio:2},
     {id:'K18', name:'Кредит 18', payoff:33872,  payment:6963,  months:5,  rate:11.0, prio:0},
-    {id:'K19', name:'Кредит 19', payoff:262270, payment:17962, months:17, rate:21.0, prio:10},
+    {id:'K19', name:'Кредит 19', payoff:262270, payment:17962, months:17, rate:21.0, prio:14},
     {id:'K20', name:'Кредит 20', payoff:29600,  payment:5093,  months:6,  rate:11.0, prio:0},
-    {id:'K21', name:'Кредит 21', payoff:27384,  payment:4058,  months:7,  rate:11.0, prio:0}
+    {id:'K21', name:'Кредит 21', payoff:27384,  payment:4058,  months:7,  rate:11.0, prio:0},
+    // новые, сообщены 02.11.2026: сумма выдачи и полный срок; ставка — из суммы, срока и переплаты
+    {id:'K22', name:'Кредит 22', payoff:351000, payment:14397, months:48, rate:38.3, prio:12},
+    {id:'K23', name:'Кредит 23', payoff:240000, payment:14460, months:24, rate:38.3, prio:10},
+    {id:'K24', name:'Кредит 24', payoff:150000, payment:9037,  months:24, rate:38.3, prio:9},
+    {id:'K25', name:'Кредит 25', payoff:50000,  payment:5140,  months:12, rate:40.7, prio:3}
   ];
 
   var DEFAULT_BILLS = [
@@ -275,6 +280,19 @@
       S.loans.forEach(function(l){if(bump[l.id])l.prio=bump[l.id];});
       S.loans.unshift({id:'MFO',name:'МФО Freedom',payoff:501704,payment:50642,
                        months:12,rate:37.0,prio:6,day:18,closed:false});
+      persist();
+    }
+    // 02.11.2026: четыре новых кредита Kaspi; очередь перестроена под их ставки и размер
+    var hasNew=false;
+    S.loans.forEach(function(l){if(l.id==='K22')hasNew=true;});
+    if(!hasNew){
+      var reprio={};
+      DEFAULT_LOANS.forEach(function(l){if(l.prio)reprio[l.id]=l.prio;});
+      S.loans.forEach(function(l){if(reprio[l.id])l.prio=reprio[l.id];});
+      DEFAULT_LOANS.forEach(function(l){
+        if(!/^K2[2-5]$/.test(l.id))return;
+        var c={};for(var k in l)c[k]=l[k];c.closed=false;S.loans.push(c);
+      });
       persist();
     }
     S.loans.forEach(function(l){if(!l.day)l.day=12;});
